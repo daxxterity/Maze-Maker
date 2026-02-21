@@ -1,0 +1,5 @@
+{
+  "name": "Dungeon Architect",
+  "description": "A grid-based dungeon maze builder with build and play modes, featuring a rich library of tiles and obstacles.",
+  "requestFramePermissions": []
+}

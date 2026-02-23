@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Stage, Layer, Rect, Line, Circle, Group, Text } from 'react-konva';
+import { Stage, Layer, Rect, Line, Circle, Group, Text, Ellipse } from 'react-konva';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Plus, 
@@ -18,7 +18,12 @@ import {
   Skull,
   ToggleLeft,
   ToggleRight,
-  GripHorizontal
+  GripHorizontal,
+  Moon,
+  Sun,
+  BookOpen,
+  HelpCircle,
+  Info
 } from 'lucide-react';
 import { cn } from './lib/utils';
 import { TileType, TileData, GameMode, DungeonMap } from './types';
@@ -49,6 +54,8 @@ const TileRenderer = ({
   tile, 
   hasArtefact, 
   isPowerUpActive, 
+  isThirdEyeActive,
+  thirdEyeTimeLeft,
   powerUpTimeLeft, 
   powerUpDuration, 
   tick,
@@ -57,6 +64,8 @@ const TileRenderer = ({
   tile: TileData, 
   hasArtefact: boolean, 
   isPowerUpActive: boolean, 
+  isThirdEyeActive: boolean,
+  thirdEyeTimeLeft: number,
   powerUpTimeLeft: number,
   powerUpDuration: number,
   tick: number,
@@ -153,7 +162,9 @@ const TileRenderer = ({
         return (
           <Group x={drawOffset} y={drawOffset}>
             <Rect width={drawSize} height={drawSize} fill="#6b7280" opacity={isItem || isPowerUp ? 0.8 : 1} />
-            <Rect x={0} y={drawCenter - 2} width={drawSize} height={4} fill="#d97706" />
+            {/* One-way door: Red (outside/no-go) and Green (inside/go) */}
+            <Rect x={0} y={0} width={drawSize} height={3} fill="#ef4444" />
+            <Rect x={0} y={3} width={drawSize} height={3} fill="#22c55e" />
           </Group>
         );
       case 'rotating-wall':
@@ -222,28 +233,52 @@ const TileRenderer = ({
       case 'artefact':
         return (
           <Group x={drawOffset} y={drawOffset}>
-            <Rect width={drawSize} height={drawSize} fill="#6b7280" opacity={isItem || isPowerUp ? 0.8 : 1} />
-            <Circle x={drawCenter} y={drawCenter} radius={drawSize/5} fill="#fbbf24" stroke="#d97706" strokeWidth={2} />
-            <Circle x={drawCenter} y={drawCenter} radius={drawSize/10} fill="white" opacity={0.5} />
+            <Circle 
+              x={drawCenter} 
+              y={drawCenter} 
+              radius={drawSize/4} 
+              fill="#fbbf24" 
+              stroke="#d97706" 
+              strokeWidth={2} 
+              shadowBlur={5}
+              shadowColor="rgba(0,0,0,0.3)"
+            />
+            <Circle x={drawCenter - 2} y={drawCenter - 2} radius={drawSize/12} fill="white" opacity={0.6} />
           </Group>
         );
       case 'exit':
         return (
           <Group x={drawOffset} y={drawOffset}>
-            <Rect width={drawSize} height={drawSize} fill="#6b7280" opacity={isItem || isPowerUp ? 0.8 : 1} />
             {hasArtefact ? (
-              <Circle x={drawCenter} y={drawCenter} radius={drawSize/2 - 2} fill="#7dd3fc" stroke="#0ea5e9" strokeWidth={2} />
-            ) : (
               <Group>
-                <Line points={[4, 4, drawSize-4, drawSize-4]} stroke="#0ea5e9" strokeWidth={4} />
-                <Line points={[drawSize-4, 4, 4, drawSize-4]} stroke="#0ea5e9" strokeWidth={4} />
+                <Circle 
+                  x={drawCenter} 
+                  y={drawCenter} 
+                  radius={drawSize/2 - 4} 
+                  fill="#7dd3fc" 
+                  stroke="#0ea5e9" 
+                  strokeWidth={2} 
+                  opacity={0.8}
+                />
+                <Circle 
+                  x={drawCenter} 
+                  y={drawCenter} 
+                  radius={drawSize/4} 
+                  fill="white" 
+                  opacity={0.3}
+                />
+              </Group>
+            ) : (
+              <Group opacity={0.5}>
+                <Line points={[8, 8, drawSize-8, drawSize-8]} stroke="#0ea5e9" strokeWidth={3} />
+                <Line points={[drawSize-8, 8, 8, drawSize-8]} stroke="#0ea5e9" strokeWidth={3} />
               </Group>
             )}
           </Group>
         );
       case 'portal':
-        const isBlinkingRange = mode === 'play' && isPowerUpActive && powerUpTimeLeft > 0 && powerUpTimeLeft <= powerUpDuration * 0.2;
-        const isVisible = mode === 'build' || (isPowerUpActive && powerUpTimeLeft > 0);
+        const isBlinkingRange = mode === 'play' && isThirdEyeActive && thirdEyeTimeLeft > 0 && thirdEyeTimeLeft <= 5;
+        const isVisible = mode === 'build' || (isThirdEyeActive && thirdEyeTimeLeft > 0);
         const opacity = isVisible ? (isBlinkingRange ? (tick % 2 === 0 ? 0.2 : 1) : 1) : 0;
         return (
           <Group x={drawOffset} y={drawOffset} opacity={opacity}>
@@ -301,6 +336,29 @@ const TileRenderer = ({
             <Circle x={drawCenter+8} y={8} radius={4} fill="#475569" />
           </Group>
         );
+      case 'third-eye':
+        return (
+          <Group x={drawOffset} y={drawOffset}>
+            <Circle x={drawCenter} y={drawCenter} radius={drawSize/3} fill="#a855f7" opacity={0.3} />
+            <Ellipse x={drawCenter} y={drawCenter} radiusX={drawSize/3} radiusY={drawSize/6} stroke="#a855f7" strokeWidth={2} />
+            <Circle x={drawCenter} y={drawCenter} radius={drawSize/8} fill="#d8b4fe" />
+          </Group>
+        );
+      case 'clue':
+        const isClueVisible = mode === 'build' || isPowerUpActive;
+        return (
+          <Group x={drawOffset} y={drawOffset} opacity={isClueVisible ? 1 : 0}>
+            <Circle x={drawCenter} y={drawCenter} radius={drawSize/3} fill="#f472b6" opacity={0.2} />
+            <Text 
+              text="?" 
+              fontSize={14} 
+              fill="#f472b6" 
+              x={drawCenter - 4} 
+              y={drawCenter - 7} 
+              fontStyle="bold" 
+            />
+          </Group>
+        );
       case 'orc':
         return (
           <Group x={drawOffset} y={drawOffset}>
@@ -326,6 +384,16 @@ const TileRenderer = ({
             <Circle x={drawCenter} y={drawCenter} radius={drawSize/4} fill="black" />
           </Group>
         );
+      case 'web':
+        return (
+          <Group x={drawOffset} y={drawOffset}>
+            <Line points={[0, 0, drawSize, drawSize]} stroke="white" strokeWidth={1} opacity={0.5} />
+            <Line points={[drawSize, 0, 0, drawSize]} stroke="white" strokeWidth={1} opacity={0.5} />
+            <Line points={[drawCenter, 0, drawCenter, drawSize]} stroke="white" strokeWidth={1} opacity={0.5} />
+            <Line points={[0, drawCenter, drawSize, drawCenter]} stroke="white" strokeWidth={1} opacity={0.5} />
+            <Circle x={drawCenter} y={drawCenter} radius={drawSize/3} stroke="white" strokeWidth={1} opacity={0.3} />
+          </Group>
+        );
       default:
         return <Rect width={s} height={s} fill="gray" />;
     }
@@ -342,13 +410,48 @@ const TileRenderer = ({
       <Group opacity={tile.isNeutralized ? 0.4 : 1}>
         {getTileContent()}
       </Group>
+      {(mode === 'build' || isPowerUpActive) && tile.clue && (
+        <Group 
+          x={center - (center + 30) * Math.sin((rotation * Math.PI) / 180)} 
+          y={center - (center + 30) * Math.cos((rotation * Math.PI) / 180)}
+          rotation={-rotation}
+        >
+          <Rect 
+            width={150} 
+            height={44} 
+            fill="#ec4899" 
+            cornerRadius={8} 
+            offsetX={75}
+            offsetY={22}
+            shadowBlur={8}
+            shadowColor="black"
+            shadowOpacity={0.5}
+            stroke="white"
+            strokeWidth={1}
+          />
+          <Text 
+            text={tile.clue} 
+            fontSize={11} 
+            fill="white" 
+            width={140} 
+            align="center" 
+            offsetX={70} 
+            offsetY={16}
+            fontStyle="bold"
+            wrap="word"
+          />
+        </Group>
+      )}
       {isPowerUpActive && !isItem && !isPowerUp && !isMonster && (
         <Text 
           text="ᚱ" 
-          fontSize={10} 
-          fill="rgba(236, 72, 153, 0.4)" 
-          x={center - 5} 
-          y={center - 5} 
+          fontSize={14} 
+          fill="rgba(236, 72, 153, 0.6)" 
+          x={center} 
+          y={center} 
+          offsetX={7}
+          offsetY={7}
+          rotation={-rotation}
           fontStyle="bold"
         />
       )}
@@ -377,11 +480,16 @@ export default function App() {
   const [powerUpDuration, setPowerUpDuration] = useState(15);
   const [powerUpTimeLeft, setPowerUpTimeLeft] = useState(0);
   const [isPowerUpActive, setIsPowerUpActive] = useState(false);
+  const [isThirdEyeActive, setIsThirdEyeActive] = useState(false);
+  const [thirdEyeTimeLeft, setThirdEyeTimeLeft] = useState(0);
   const [health, setHealth] = useState(100);
   const [speedBoostTime, setSpeedBoostTime] = useState(0);
   const [jumpBoostTime, setJumpBoostTime] = useState(0);
   const [lightTime, setLightTime] = useState(0);
   const [slowMonstersTime, setSlowMonstersTime] = useState(0);
+  const [webSlowTime, setWebSlowTime] = useState(0);
+  const [webPressCount, setWebPressCount] = useState(0);
+  const [trappedTime, setTrappedTime] = useState(0);
   const [deathCount, setDeathCount] = useState(0);
   const [isFlashing, setIsFlashing] = useState(false);
   const [isDying, setIsDying] = useState(false);
@@ -392,40 +500,109 @@ export default function App() {
   const [monsters, setMonsters] = useState<{ id: string, type: TileType, x: number, y: number }[]>([]);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   const [pressedKeys, setPressedKeys] = useState<Set<string>>(new Set());
+  const [pendingClueText, setPendingClueText] = useState("Watch out!");
+  const [isDarknessOn, setIsDarknessOn] = useState(false);
+  const [darknessRadius, setDarknessRadius] = useState(4);
+  const [hoveredTile, setHoveredTile] = useState<TileDefinition | null>(null);
+  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+  const [showArtefactModal, setShowArtefactModal] = useState(false);
+  const [purpose, setPurpose] = useState("");
+  const [howTo, setHowTo] = useState("");
+  const [instructions, setInstructions] = useState("");
+  const [showPurposeModal, setShowPurposeModal] = useState(false);
+  const [showHowToModal, setShowHowToModal] = useState(false);
+  const [showInstructionsModal, setShowInstructionsModal] = useState(false);
+  const [showClearConfirmModal, setShowClearConfirmModal] = useState(false);
   
   const stageRef = useRef<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const isWallBlocked = useCallback((tile: TileData, dir: string) => {
+  const isWallBlocked = useCallback((tile: TileData, dir: string, px: number, py: number, isEntry: boolean = false) => {
     const r = tile.rotation;
-    switch (tile.type) {
-      case 'corridor':
-        if (r === 0 || r === 180) return dir === 'up' || dir === 'down';
-        return dir === 'left' || dir === 'right';
-      case 'corner':
-        if (r === 0) return dir === 'up' || dir === 'left';
-        if (r === 90) return dir === 'up' || dir === 'right';
-        if (r === 180) return dir === 'down' || dir === 'right';
-        if (r === 270) return dir === 'down' || dir === 'left';
-        break;
-      case 't-junction':
-        if (r === 0) return dir === 'up';
-        if (r === 90) return dir === 'right';
-        if (r === 180) return dir === 'down';
-        if (r === 270) return dir === 'left';
-        break;
-      case 'one-side':
-        if (r === 0) return dir === 'up';
-        if (r === 90) return dir === 'right';
-        if (r === 180) return dir === 'down';
-        if (r === 270) return dir === 'left';
-        break;
-      case 'cul-de-sac':
-        if (r === 0) return dir === 'up' || dir === 'left' || dir === 'right';
-        if (r === 90) return dir === 'right' || dir === 'up' || dir === 'down';
-        if (r === 180) return dir === 'down' || dir === 'left' || dir === 'right';
-        if (r === 270) return dir === 'left' || dir === 'up' || dir === 'down';
-        break;
+    const tx = tile.x;
+    const ty = tile.y;
+    const relX = px - tx;
+    const relY = py - ty;
+
+    if (tile.size === 2) {
+      switch (tile.type) {
+        case 'rotating-wall-l':
+          if (r === 0) {
+            if (relY === 0 && relX === 0 && dir === 'right') return true;
+            if (relY === 0 && relX === 1 && dir === 'left') return true;
+            if (relX === 1 && relY === 0 && dir === 'down') return true;
+            if (relX === 1 && relY === 1 && dir === 'up') return true;
+          } else if (r === 90) {
+            if (relX === 1 && relY === 0 && dir === 'down') return true;
+            if (relX === 1 && relY === 1 && dir === 'up') return true;
+            if (relY === 1 && relX === 1 && dir === 'left') return true;
+            if (relY === 1 && relX === 0 && dir === 'right') return true;
+          } else if (r === 180) {
+            if (relY === 1 && relX === 1 && dir === 'left') return true;
+            if (relY === 1 && relX === 0 && dir === 'right') return true;
+            if (relX === 0 && relY === 1 && dir === 'up') return true;
+            if (relX === 0 && relY === 0 && dir === 'down') return true;
+          } else if (r === 270) {
+            if (relX === 0 && relY === 1 && dir === 'up') return true;
+            if (relX === 0 && relY === 0 && dir === 'down') return true;
+            if (relY === 0 && relX === 0 && dir === 'right') return true;
+            if (relY === 0 && relX === 1 && dir === 'left') return true;
+          }
+          break;
+        case 'rotating-wall-i':
+          if (r === 0 || r === 180) {
+            if (relX === 0 && dir === 'right') return true;
+            if (relX === 1 && dir === 'left') return true;
+          } else {
+            if (relY === 0 && dir === 'down') return true;
+            if (relY === 1 && dir === 'up') return true;
+          }
+          break;
+        case 'rotating-wall-plus':
+          if (relX === 0 && dir === 'right') return true;
+          if (relX === 1 && dir === 'left') return true;
+          if (relY === 0 && dir === 'down') return true;
+          if (relY === 1 && dir === 'up') return true;
+          break;
+      }
+    } else {
+      switch (tile.type) {
+        case 'corridor':
+          if (r === 0 || r === 180) return dir === 'up' || dir === 'down';
+          return dir === 'left' || dir === 'right';
+        case 'corner':
+          if (r === 0) return dir === 'up' || dir === 'left';
+          if (r === 90) return dir === 'up' || dir === 'right';
+          if (r === 180) return dir === 'down' || dir === 'right';
+          if (r === 270) return dir === 'down' || dir === 'left';
+          break;
+        case 't-junction':
+          if (r === 0) return dir === 'up';
+          if (r === 90) return dir === 'right';
+          if (r === 180) return dir === 'down';
+          if (r === 270) return dir === 'left';
+          break;
+        case 'one-side':
+          if (r === 0) return dir === 'up';
+          if (r === 90) return dir === 'right';
+          if (r === 180) return dir === 'down';
+          if (r === 270) return dir === 'left';
+          break;
+        case 'cul-de-sac':
+          if (r === 0) return dir === 'up' || dir === 'left' || dir === 'right';
+          if (r === 90) return dir === 'right' || dir === 'up' || dir === 'down';
+          if (r === 180) return dir === 'down' || dir === 'left' || dir === 'right';
+          if (r === 270) return dir === 'left' || dir === 'up' || dir === 'down';
+          break;
+        case 'door':
+          // One-way door: Red (outside) blocks entry, Green (inside) allows exit.
+          // r=0: door at top. Entry from top (dir='up') is blocked.
+          if (r === 0) return isEntry && dir === 'up';
+          if (r === 90) return isEntry && dir === 'right';
+          if (r === 180) return isEntry && dir === 'down';
+          if (r === 270) return isEntry && dir === 'left';
+          break;
+      }
     }
     return false;
   }, []);
@@ -475,10 +652,84 @@ export default function App() {
         if (jumpBoostTime > 0) setJumpBoostTime(prev => Math.max(0, prev - 0.1));
         if (lightTime > 0) setLightTime(prev => Math.max(0, prev - 0.1));
         if (slowMonstersTime > 0) setSlowMonstersTime(prev => Math.max(0, prev - 0.1));
+        if (webSlowTime > 0) {
+          setWebSlowTime(prev => {
+            const next = Math.max(0, prev - 0.1);
+            if (next === 0) setWebPressCount(0);
+            return next;
+          });
+        }
+        if (thirdEyeTimeLeft > 0) setThirdEyeTimeLeft(prev => Math.max(0, prev - 0.1));
+        if (thirdEyeTimeLeft <= 0.1 && isThirdEyeActive) {
+          setIsThirdEyeActive(false);
+          // Portals disappear permanently after activation expires
+          setTiles(prev => prev.filter(t => t.type !== 'portal'));
+        }
       }, 100);
     }
     return () => clearInterval(interval);
-  }, [isPowerUpActive, powerUpTimeLeft, speedBoostTime, jumpBoostTime, lightTime, slowMonstersTime, mode]);
+  }, [isPowerUpActive, powerUpTimeLeft, speedBoostTime, jumpBoostTime, lightTime, slowMonstersTime, mode, thirdEyeTimeLeft, isThirdEyeActive, webSlowTime]);
+
+  // Trapped check
+  useEffect(() => {
+    let interval: any;
+    if (mode === 'play' && !isGameOver && !isWin && !isDying) {
+      interval = setInterval(() => {
+        const directions = [
+          { dx: 0, dy: -1, name: 'up', opp: 'down' },
+          { dx: 0, dy: 1, name: 'down', opp: 'up' },
+          { dx: -1, dy: 0, name: 'left', opp: 'right' },
+          { dx: 1, dy: 0, name: 'right', opp: 'left' }
+        ];
+
+        let canMove = false;
+        let hasInactivePortal = false;
+
+        for (const dir of directions) {
+          const nx = playerPos.x + dir.dx;
+          const ny = playerPos.y + dir.dy;
+
+          if (nx < 0 || nx >= CANVAS_WIDTH / GRID_SIZE || ny < 0 || ny >= CANVAS_HEIGHT / GRID_SIZE) continue;
+
+          const currentTiles = tiles.filter(t => {
+            if (t.size === 1) return t.x === playerPos.x && t.y === playerPos.y;
+            return playerPos.x >= t.x && playerPos.x < t.x + 2 && playerPos.y >= t.y && playerPos.y < t.y + 2;
+          });
+          const nextTiles = tiles.filter(t => {
+            if (t.size === 1) return t.x === nx && t.y === ny;
+            return nx >= t.x && nx < t.x + 2 && ny >= t.y && ny < t.y + 2;
+          });
+
+          const blockedByWall = currentTiles.some(t => isWallBlocked(t, dir.name, playerPos.x, playerPos.y, false)) || nextTiles.some(t => isWallBlocked(t, dir.opp, nx, ny, true));
+          const blockedByObstacle = nextTiles.some(t => t.type === 'column' || t.type === 'tree' || (t.type === 'obstacle-half-h' && playerAction !== 'jump') || (t.type === 'obstacle-above' && playerAction !== 'slide'));
+          
+          if (nextTiles.some(t => t.type === 'portal')) {
+            if (isThirdEyeActive) {
+              canMove = true;
+            } else {
+              hasInactivePortal = true;
+            }
+          } else if (!blockedByWall && !blockedByObstacle) {
+            canMove = true;
+          }
+        }
+
+        if (!canMove && hasInactivePortal) {
+          setTrappedTime(prev => {
+            if (prev >= 9) {
+              setIsGameOver(true);
+              setDeathCount(d => d + 1);
+              return 0;
+            }
+            return prev + 1;
+          });
+        } else {
+          setTrappedTime(0);
+        }
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [mode, playerPos, tiles, isThirdEyeActive, isGameOver, isWin, isDying, playerAction, isWallBlocked]);
 
   // Monster logic
   useEffect(() => {
@@ -498,7 +749,11 @@ export default function App() {
 
         // Move monsters
         if (monsters.length > 0) {
+          const isSpiderTick = Math.floor(playTime * 2) % 2 === 0;
+
           setMonsters(prev => prev.map(m => {
+            if (m.type === 'spider' && !isSpiderTick) return m;
+
             const dx = playerPos.x - m.x;
             const dy = playerPos.y - m.y;
             
@@ -531,10 +786,10 @@ export default function App() {
                 if (t.size === 1) return t.x === m.x && t.y === m.y;
                 return m.x >= t.x && m.x < t.x + 2 && m.y >= t.y && m.y < t.y + 2;
               });
-              if (currentTiles.some(t => isWallBlocked(t, dir))) return false;
+              if (currentTiles.some(t => isWallBlocked(t, dir, m.x, m.y, false))) return false;
 
               // Wall check (next)
-              if (targetTiles.some(t => isWallBlocked(t, oppDir))) return false;
+              if (targetTiles.some(t => isWallBlocked(t, oppDir, targetX, targetY, true))) return false;
 
               // Orc specific
               if (m.type === 'orc') {
@@ -600,6 +855,22 @@ export default function App() {
               if (!tryMove(0, dy > 0 ? 1 : -1)) {
                 if (dx !== 0) tryMove(dx > 0 ? 1 : -1, 0);
               }
+            }
+
+            // Spider leaves web trail
+            if (m.type === 'spider' && moved) {
+              setTiles(prev => {
+                // Check if web already exists at current position
+                if (prev.some(t => t.type === 'web' && t.x === m.x && t.y === m.y)) return prev;
+                return [...prev, {
+                  id: Math.random().toString(36).substr(2, 9),
+                  type: 'web',
+                  x: m.x,
+                  y: m.y,
+                  rotation: 0,
+                  size: 1
+                }];
+              });
             }
 
             // Check collision with player
@@ -703,7 +974,11 @@ export default function App() {
     const existingSameTypeIndex = tiles.findIndex(t => t.x === x && t.y === y && t.type === selectedTileType);
     if (existingSameTypeIndex > -1) {
       const newTiles = [...tiles];
-      newTiles[existingSameTypeIndex].rotation = (newTiles[existingSameTypeIndex].rotation + 90) % 360;
+      if (selectedTileType === 'clue') {
+        newTiles[existingSameTypeIndex].clue = pendingClueText;
+      } else {
+        newTiles[existingSameTypeIndex].rotation = (newTiles[existingSameTypeIndex].rotation + 90) % 360;
+      }
       setTiles(newTiles);
       return;
     }
@@ -744,14 +1019,20 @@ export default function App() {
     }
 
     // Otherwise, just add it (layering)
+    let clueText = undefined;
+    if (selectedTileType === 'clue') {
+      clueText = pendingClueText || "Tip";
+    }
+
     const newTileId = Math.random().toString(36).substr(2, 9);
-    const newTile = {
+    const newTile: TileData = {
       id: newTileId,
       type: selectedTileType,
       x,
       y,
       rotation: currentRotation,
-      size: tileDef.size
+      size: tileDef.size,
+      clue: clueText
     };
     setTiles([...tiles, newTile]);
 
@@ -797,7 +1078,11 @@ export default function App() {
       tiles,
       triggers,
       gridSize: GRID_SIZE,
-      powerUpDuration
+      powerUpDuration,
+      darknessRadius,
+      purpose,
+      howTo,
+      instructions
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -829,6 +1114,12 @@ export default function App() {
         if (data.powerUpDuration) {
           setPowerUpDuration(data.powerUpDuration);
         }
+        if (data.darknessRadius) {
+          setDarknessRadius(data.darknessRadius);
+        }
+        if (data.purpose) setPurpose(data.purpose);
+        if (data.howTo) setHowTo(data.howTo);
+        if (data.instructions) setInstructions(data.instructions);
       } catch (err) {
         console.error("Failed to parse JSON", err);
       }
@@ -837,16 +1128,36 @@ export default function App() {
   };
 
   const clearDungeon = () => {
-    if (confirm("Clear all tiles?")) {
-      setTiles([]);
-      setTriggers([]);
-      setDeathCount(0);
-      setDungeonName("My Dungeon");
-      setIsGameOver(false);
-      setIsWin(false);
-      setHasArtefact(false);
-      setIsFlashing(false);
-    }
+    setShowClearConfirmModal(true);
+  };
+
+  const handleConfirmClear = () => {
+    setTiles([]);
+    setTriggers([]);
+    setDeathCount(0);
+    setDungeonName("My Dungeon");
+    setIsGameOver(false);
+    setIsWin(false);
+    setHasArtefact(false);
+    setHiddenTileIds(new Set());
+    setIsPowerUpActive(false);
+    setPowerUpTimeLeft(0);
+    setHealth(100);
+    setSpeedBoostTime(0);
+    setJumpBoostTime(0);
+    setLightTime(0);
+    setSlowMonstersTime(0);
+    setWebSlowTime(0);
+    setWebPressCount(0);
+    setIsThirdEyeActive(false);
+    setThirdEyeTimeLeft(0);
+    setIsFlashing(false);
+    setPlayTime(0);
+    setMonsters([]);
+    setPurpose("");
+    setHowTo("");
+    setInstructions("");
+    setShowClearConfirmModal(false);
   };
 
   const restartGame = () => {
@@ -856,7 +1167,18 @@ export default function App() {
     setHiddenTileIds(new Set());
     setIsPowerUpActive(false);
     setPowerUpTimeLeft(0);
+    setHealth(100);
+    setSpeedBoostTime(0);
+    setJumpBoostTime(0);
+    setLightTime(0);
+    setSlowMonstersTime(0);
+    setWebSlowTime(0);
+    setWebPressCount(0);
+    setIsThirdEyeActive(false);
+    setThirdEyeTimeLeft(0);
     setIsFlashing(false);
+    setPlayTime(0);
+    setMonsters([]);
     const entrance = tiles.find(t => t.type === 'entrance');
     if (entrance) {
       setPlayerPos({ x: entrance.x, y: entrance.y });
@@ -869,6 +1191,9 @@ export default function App() {
 
   useEffect(() => {
     if (mode === 'play') {
+      if (instructions) {
+        setShowInstructionsModal(true);
+      }
       setIsGameOver(false);
       setIsWin(false);
       setHasArtefact(false);
@@ -880,6 +1205,10 @@ export default function App() {
       setJumpBoostTime(0);
       setLightTime(0);
       setSlowMonstersTime(0);
+      setWebSlowTime(0);
+      setWebPressCount(0);
+      setIsThirdEyeActive(false);
+      setThirdEyeTimeLeft(0);
       setIsFlashing(false);
       setPlayTime(0);
       setMonsters([]);
@@ -903,7 +1232,9 @@ export default function App() {
     }
 
     const jumpMultiplier = jumpBoostTime > 0 ? 2 : 1;
-    const step = (isSpecial ? 2 * jumpMultiplier : 1) * (speedBoostTime > 0 ? 2 : 1);
+    const webMultiplier = webSlowTime > 0 ? 0.5 : 1;
+    
+    const step = Math.max(1, Math.floor((isSpecial ? 2 * jumpMultiplier : 1) * (speedBoostTime > 0 ? 2 : 1) * webMultiplier));
     let finalX = playerPos.x;
     let finalY = playerPos.y;
 
@@ -915,19 +1246,57 @@ export default function App() {
       // Boundary check
       if (nextX < 0 || nextX >= CANVAS_WIDTH / GRID_SIZE || nextY < 0 || nextY >= CANVAS_HEIGHT / GRID_SIZE) break;
 
+      const nextTiles = tiles.filter(t => {
+        if (t.size === 1) return t.x === nextX && t.y === nextY;
+        return nextX >= t.x && nextX < t.x + 2 && nextY >= t.y && nextY < t.y + 2;
+      });
+
+      // Monster collision check (Cannot jump over Orcs or Spiders, but CAN jump over Teeth)
+      const monsterAtNext = monsters.find(m => m.x === nextX && m.y === nextY);
+      if (monsterAtNext) {
+        const isTeeth = monsterAtNext.type === 'teeth';
+        const canJumpOver = isTeeth && playerAction === 'jump';
+
+        if (!canJumpOver) {
+          setIsDying(true);
+          setIsFlashing(true);
+          setDeathCount(prev => prev + 1);
+          setHealth(0);
+          finalX = nextX;
+          finalY = nextY;
+          setTimeout(() => {
+            setIsDying(false);
+            setIsFlashing(false);
+            setHealth(100);
+            const entrance = tiles.find(t => t.type === 'entrance');
+            if (entrance) {
+              setPlayerPos({ x: entrance.x, y: entrance.y });
+            } else {
+              setPlayerPos({ x: 0, y: 0 });
+            }
+            setMonsters([]);
+            setPlayTime(0);
+          }, 1000);
+          break;
+        }
+      }
+
+      // Web collision check
+      const webTile = nextTiles.find(t => t.type === 'web');
+      if (webTile) {
+        setWebSlowTime(2); // Slow down for 2 seconds or next move
+        setTiles(prev => prev.filter(t => t.id !== webTile.id));
+      }
+
       // Wall collision check (Current tile exit)
       const currentTiles = tiles.filter(t => {
         if (t.size === 1) return t.x === finalX && t.y === finalY;
         return finalX >= t.x && finalX < t.x + 2 && finalY >= t.y && finalY < t.y + 2;
       });
-      if (currentTiles.some(t => isWallBlocked(t, direction))) break;
+      if (currentTiles.some(t => isWallBlocked(t, direction, finalX, finalY, false))) break;
 
       // Wall collision check (Next tile entry)
-      const nextTiles = tiles.filter(t => {
-        if (t.size === 1) return t.x === nextX && t.y === nextY;
-        return nextX >= t.x && nextX < t.x + 2 && nextY >= t.y && nextY < t.y + 2;
-      });
-      if (nextTiles.some(t => isWallBlocked(t, oppositeDir))) break;
+      if (nextTiles.some(t => isWallBlocked(t, oppositeDir, nextX, nextY, true))) break;
 
       // Swerve check
       if (!isIntermediate && nextTiles.some(t => !t.isNeutralized && isSwerveBlocked(t, direction, playerAction === 'jump'))) break;
@@ -966,6 +1335,7 @@ export default function App() {
       if (artefactTile) {
         setHasArtefact(true);
         setHiddenTileIds(prev => new Set(prev).add(artefactTile.id));
+        setShowArtefactModal(true);
       }
 
       // Power up collection
@@ -974,6 +1344,13 @@ export default function App() {
         setIsPowerUpActive(true);
         setPowerUpTimeLeft(powerUpDuration);
         setHiddenTileIds(prev => new Set(prev).add(mushroomTile.id));
+      }
+
+      const thirdEyeTile = nextTiles.find(t => t.type === 'third-eye' && !hiddenTileIds.has(t.id));
+      if (thirdEyeTile) {
+        setIsThirdEyeActive(true);
+        setThirdEyeTimeLeft(powerUpDuration);
+        setHiddenTileIds(prev => new Set(prev).add(thirdEyeTile.id));
       }
 
       const healthPotion = nextTiles.find(t => t.type === 'health-potion' && !hiddenTileIds.has(t.id));
@@ -1007,7 +1384,7 @@ export default function App() {
       }
 
       // Portal teleportation
-      if (isPowerUpActive && nextTiles.some(t => t.type === 'portal')) {
+      if (isThirdEyeActive && nextTiles.some(t => t.type === 'portal')) {
         const otherPortal = tiles.find(t => t.type === 'portal' && (t.x !== nextX || t.y !== nextY));
         if (otherPortal) {
           finalX = otherPortal.x;
@@ -1041,7 +1418,7 @@ export default function App() {
     }
 
     setPlayerPos({ x: finalX, y: finalY });
-  }, [mode, playerPos, tiles, playerAction, isGameOver, isWin, isDying, triggers, hasArtefact, pressedKeys, isPowerUpActive, powerUpDuration]);
+  }, [mode, playerPos, tiles, playerAction, isGameOver, isWin, isDying, triggers, hasArtefact, pressedKeys, isPowerUpActive, powerUpDuration, monsters, webSlowTime]);
 
   // Auto-running logic
   useEffect(() => {
@@ -1067,6 +1444,16 @@ export default function App() {
       }
 
       if (mode !== 'play') return;
+
+      const isMoveKey = ['w', 's', 'a', 'd', ' ', 'shift'].includes(key);
+      if (webSlowTime > 0 && isMoveKey) {
+        if (webPressCount === 0) {
+          setWebPressCount(1);
+          return;
+        } else {
+          setWebPressCount(0);
+        }
+      }
 
       switch (key) {
         case 'w': movePlayer(0, -1); break;
@@ -1104,10 +1491,175 @@ export default function App() {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [mode, movePlayer]);
+  }, [mode, movePlayer, webSlowTime, webPressCount, lastDirection]);
 
   return (
     <div className="flex h-screen bg-[#141414] text-zinc-100 font-sans overflow-hidden">
+      {/* Clear Confirmation Modal */}
+      <AnimatePresence>
+        {showClearConfirmModal && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-zinc-900 border border-red-500/30 rounded-2xl p-8 max-w-sm w-full shadow-2xl text-center"
+            >
+              <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Trash2 className="text-red-500" size={32} />
+              </div>
+              <h3 className="text-xl font-bold text-white mb-2">Clear Canvas?</h3>
+              <p className="text-zinc-400 text-sm mb-8">
+                This will permanently delete all tiles and reset the level configuration. This action cannot be undone.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowClearConfirmModal(false)}
+                  className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold rounded-xl transition-colors"
+                >
+                  CANCEL
+                </button>
+                <button
+                  onClick={handleConfirmClear}
+                  className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl transition-all active:scale-95 shadow-lg shadow-red-500/20"
+                >
+                  CLEAR ALL
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Instructions Modal */}
+      <AnimatePresence>
+        {showInstructionsModal && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-zinc-900 border border-indigo-500/30 rounded-3xl p-8 max-w-md w-full shadow-2xl"
+            >
+              <div className="w-16 h-16 bg-indigo-500/20 rounded-2xl flex items-center justify-center mb-6 border border-indigo-500/30">
+                <Info size={32} className="text-indigo-400" />
+              </div>
+              <h2 className="text-2xl font-bold text-white mb-4 tracking-tight uppercase tracking-widest">Briefing</h2>
+              <div className="text-zinc-400 text-sm mb-8 leading-relaxed whitespace-pre-wrap">
+                {instructions || "Welcome to the dungeon. Good luck."}
+              </div>
+              <button
+                onClick={() => setShowInstructionsModal(false)}
+                className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition-all active:scale-95 shadow-lg shadow-indigo-500/20"
+              >
+                UNDERSTOOD
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Purpose Modal */}
+      <AnimatePresence>
+        {showPurposeModal && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 20, opacity: 0 }}
+              className="bg-zinc-900 border border-amber-500/30 rounded-2xl p-6 max-w-sm w-full shadow-2xl"
+            >
+              <h3 className="text-xs font-bold text-amber-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                <BookOpen size={14} /> Level Purpose
+              </h3>
+              <p className="text-zinc-300 text-sm leading-relaxed mb-6">
+                {purpose || "No purpose defined for this level."}
+              </p>
+              <button
+                onClick={() => setShowPurposeModal(false)}
+                className="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-bold rounded-lg transition-colors"
+              >
+                CLOSE
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* How-to Modal */}
+      <AnimatePresence>
+        {showHowToModal && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 20, opacity: 0 }}
+              className="bg-zinc-900 border border-emerald-500/30 rounded-2xl p-6 max-w-sm w-full shadow-2xl"
+            >
+              <h3 className="text-xs font-bold text-emerald-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                <HelpCircle size={14} /> Solution Guide
+              </h3>
+              <p className="text-zinc-300 text-sm leading-relaxed mb-6">
+                {howTo || "No solution guide available."}
+              </p>
+              <button
+                onClick={() => setShowHowToModal(false)}
+                className="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-bold rounded-lg transition-colors"
+              >
+                CLOSE
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Library Tooltip */}
+      <AnimatePresence>
+        {hoveredTile && (
+          <motion.div
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -10 }}
+            style={{ left: tooltipPos.x, top: tooltipPos.y }}
+            className="fixed z-50 w-48 bg-zinc-900/95 backdrop-blur-xl border border-white/10 rounded-xl p-3 shadow-2xl pointer-events-none"
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: hoveredTile.color }} />
+              <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-300">{hoveredTile.label}</span>
+            </div>
+            <p className="text-[10px] text-zinc-500 leading-relaxed">{hoveredTile.description}</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Artefact Celebration Modal */}
+      <AnimatePresence>
+        {showArtefactModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              className="bg-zinc-900 border border-amber-500/50 rounded-3xl p-8 max-w-sm w-full text-center shadow-[0_0_50px_rgba(251,191,36,0.2)]"
+            >
+              <div className="w-20 h-20 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto mb-6 border border-amber-500/30">
+                <Zap size={40} className="text-amber-400 animate-pulse" />
+              </div>
+              <h2 className="text-2xl font-bold text-white mb-2 tracking-tight">ARTEFACT COLLECTED!</h2>
+              <p className="text-zinc-400 text-sm mb-8">
+                The ancient power flows through you. The exit is now open. Find your way out of the dungeon!
+              </p>
+              <button
+                onClick={() => setShowArtefactModal(false)}
+                className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-xl transition-all active:scale-95"
+              >
+                CONTINUE MISSION
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Sidebar */}
       <div 
         className={cn(
@@ -1149,6 +1701,46 @@ export default function App() {
             )}
           </div>
 
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 space-y-3">
+            <button 
+              onClick={() => {
+                setCollapsedSections(prev => {
+                  const next = new Set(prev);
+                  if (next.has('narrative')) next.delete('narrative');
+                  else next.add('narrative');
+                  return next;
+                });
+              }}
+              className="w-full flex items-center justify-between group"
+            >
+              <h3 className="text-[10px] font-bold uppercase text-amber-400 tracking-widest">Narrative</h3>
+              {collapsedSections.has('narrative') ? <ChevronDown size={10} className="text-amber-600" /> : <ChevronUp size={10} className="text-amber-600" />}
+            </button>
+            
+            {!collapsedSections.has('narrative') && (
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <label className="text-[8px] text-amber-500/70 font-mono uppercase tracking-widest">Purpose</label>
+                  <textarea
+                    value={purpose}
+                    onChange={(e) => setPurpose(e.target.value)}
+                    className="w-full bg-zinc-950/50 border border-amber-500/20 rounded px-2 py-1.5 text-[10px] text-zinc-200 focus:outline-none focus:border-amber-500/50 min-h-[60px] resize-none"
+                    placeholder="What is the goal?"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[8px] text-amber-500/70 font-mono uppercase tracking-widest">How-to</label>
+                  <textarea
+                    value={howTo}
+                    onChange={(e) => setHowTo(e.target.value)}
+                    className="w-full bg-zinc-950/50 border border-amber-500/20 rounded px-2 py-1.5 text-[10px] text-zinc-200 focus:outline-none focus:border-amber-500/50 min-h-[60px] resize-none"
+                    placeholder="How to solve?"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
           {['corridor', 'item', 'quad', 'power-up', 'monster', 'artefact'].map((cat) => (
             <div key={cat} className="space-y-2">
               <button 
@@ -1172,8 +1764,14 @@ export default function App() {
                     <button
                       key={tile.type}
                       onClick={() => setSelectedTileType(tile.type)}
+                      onMouseEnter={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        setHoveredTile(tile);
+                        setTooltipPos({ x: rect.right + 12, y: rect.top });
+                      }}
+                      onMouseLeave={() => setHoveredTile(null)}
                       className={cn(
-                        "flex flex-col items-center p-2 rounded border transition-all",
+                        "flex flex-col items-center p-2 rounded border transition-all relative group",
                         selectedTileType === tile.type 
                           ? "bg-zinc-800 border-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.2)]" 
                           : "bg-zinc-900 border-white/5 hover:border-white/20"
@@ -1269,7 +1867,7 @@ export default function App() {
                 <span className="text-[10px] font-bold uppercase">New</span>
               </button>
               <button
-                onClick={() => window.location.reload()}
+                onClick={restartGame}
                 className="p-2 hover:bg-white/5 rounded text-zinc-400 hover:text-white transition-colors"
                 title="Refresh"
               >
@@ -1279,33 +1877,54 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-4">
-            {mode === 'play' && (
-              <div className="flex items-center gap-3 bg-zinc-950 px-4 py-1.5 rounded-full border border-white/5">
+            <div className="flex items-center gap-3">
+              <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest animate-pulse">Select mode -&gt;</span>
+              <div className="flex items-center gap-3 bg-zinc-950 px-4 py-1.5 rounded-full border border-cyan-500/50 shadow-[0_0_15px_rgba(6,182,212,0.15)] shadow-inner">
+                {mode === 'play' && (
+                  <>
+                    <button 
+                      onClick={restartGame}
+                      className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400 hover:text-white transition-colors px-2 py-1 rounded-md hover:bg-white/5"
+                    >
+                      <RotateCw size={12} />
+                      Restart
+                    </button>
+                    <div className="w-px h-3 bg-white/10" />
+                  </>
+                )}
                 <button 
-                  onClick={restartGame}
-                  className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400 hover:text-white transition-colors"
-                >
-                  <RotateCw size={12} />
-                  Restart
-                </button>
-                <div className="w-px h-3 bg-white/10" />
-                <button 
-                  onClick={() => setIsRunning(!isRunning)}
+                  onClick={() => setIsDarknessOn(!isDarknessOn)}
                   className={cn(
-                    "flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest transition-colors",
-                    isRunning ? "text-emerald-400" : "text-zinc-500"
+                    "flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest transition-all px-3 py-1 rounded-full border",
+                    isDarknessOn 
+                      ? "bg-amber-500/20 border-amber-500/50 text-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.2)]" 
+                      : "bg-zinc-800/50 border-transparent text-zinc-500 hover:text-zinc-300"
                   )}
+                  title={isDarknessOn ? "Turn Lights On" : "Turn Lights Off"}
                 >
-                  {isRunning ? <ToggleRight size={20} className="text-emerald-500" /> : <ToggleLeft size={20} />}
-                  {isRunning ? "Running" : "Normal"}
+                  {isDarknessOn ? <Moon size={14} /> : <Sun size={14} />}
+                  {isDarknessOn ? "Darkness" : "Light"}
                 </button>
-                <div className="w-px h-3 bg-white/10" />
-                <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-400">
-                  <Move size={12} />
-                  POS: {playerPos.x}, {playerPos.y}
-                </div>
+                
+                {mode === 'play' && (
+                  <>
+                    <div className="w-px h-3 bg-white/10" />
+                    <button 
+                      onClick={() => setIsRunning(!isRunning)}
+                      className={cn(
+                        "flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest transition-all px-3 py-1 rounded-full border",
+                        isRunning 
+                          ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.2)]" 
+                          : "bg-zinc-800/50 border-transparent text-zinc-500 hover:text-zinc-300"
+                      )}
+                    >
+                      {isRunning ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
+                      {isRunning ? "Running" : "Normal"}
+                    </button>
+                  </>
+                )}
               </div>
-            )}
+            </div>
             <div className="text-right">
               <h1 className="text-sm font-bold tracking-tighter">DUNGEON ARCHITECT</h1>
               <p className="text-[9px] text-zinc-500 font-mono uppercase tracking-widest">v1.0.4-alpha</p>
@@ -1371,6 +1990,20 @@ export default function App() {
                         />
                       </div>
                       <div className="space-y-1">
+                        <label className="text-[9px] text-zinc-500 font-mono uppercase tracking-widest">Darkness Diameter</label>
+                        <input
+                          type="number"
+                          value={darknessRadius * 2}
+                          onChange={(e) => setDarknessRadius(Number(e.target.value) / 2)}
+                          className="w-full bg-zinc-950/50 border border-white/5 rounded-lg px-3 py-2 text-sm font-bold focus:outline-none focus:border-indigo-500/50 text-zinc-100"
+                          min="1"
+                          step="0.5"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
                         <label className="text-[9px] text-zinc-500 font-mono uppercase tracking-widest">Grid Size</label>
                         <div className="h-9 flex items-center px-3 text-sm font-bold text-zinc-400 bg-zinc-950/20 rounded-lg border border-white/5">
                           {GRID_SIZE}px
@@ -1378,7 +2011,31 @@ export default function App() {
                       </div>
                     </div>
 
+                    <div className="space-y-1">
+                      <label className="text-[9px] text-zinc-500 font-mono uppercase tracking-widest">Instructions</label>
+                      <textarea
+                        value={instructions}
+                        onChange={(e) => setInstructions(e.target.value)}
+                        className="w-full bg-zinc-950/50 border border-white/5 rounded-lg px-3 py-2 text-sm font-bold focus:outline-none focus:border-indigo-500/50 text-zinc-100 placeholder:text-zinc-600 min-h-[80px] resize-none"
+                        placeholder="Introduce the level..."
+                      />
+                    </div>
+
                     <div className="h-px bg-white/5" />
+
+                    {selectedTileType === 'clue' && (
+                      <div className="space-y-1 animate-in fade-in slide-in-from-top-1">
+                        <label className="text-[9px] text-pink-500 font-mono uppercase tracking-widest">Clue Text</label>
+                        <input
+                          type="text"
+                          value={pendingClueText}
+                          onChange={(e) => setPendingClueText(e.target.value)}
+                          className="w-full bg-pink-500/10 border border-pink-500/20 rounded-lg px-3 py-2 text-sm font-bold focus:outline-none focus:border-pink-500/50 text-pink-100 placeholder:text-pink-900"
+                          placeholder="Enter clue..."
+                        />
+                        <p className="text-[8px] text-zinc-500 italic">This text will be attached to the next Clue tile you place.</p>
+                      </div>
+                    )}
 
                     <div className="space-y-2">
                       <label className="text-[9px] text-zinc-500 font-mono uppercase tracking-widest">Build Tools</label>
@@ -1432,7 +2089,25 @@ export default function App() {
           </AnimatePresence>
 
           <div className="relative shadow-[0_0_100px_rgba(0,0,0,0.5)] border border-white/5 rounded-lg overflow-hidden bg-zinc-950">
-            <Stage 
+            {/* Narrative Buttons */}
+          <div className="absolute bottom-6 right-6 flex gap-3 z-20">
+            <button
+              onClick={() => setShowPurposeModal(true)}
+              className="w-10 h-10 bg-zinc-900/90 backdrop-blur-md border border-amber-500/30 rounded-xl flex items-center justify-center text-amber-500 hover:bg-amber-500 hover:text-black transition-all shadow-lg"
+              title="Level Purpose"
+            >
+              <BookOpen size={20} />
+            </button>
+            <button
+              onClick={() => setShowHowToModal(true)}
+              className="w-10 h-10 bg-zinc-900/90 backdrop-blur-md border border-emerald-500/30 rounded-xl flex items-center justify-center text-emerald-500 hover:bg-emerald-500 hover:text-black transition-all shadow-lg"
+              title="How-to Solve"
+            >
+              <HelpCircle size={20} />
+            </button>
+          </div>
+
+          <Stage 
               width={CANVAS_WIDTH} 
               height={CANVAS_HEIGHT} 
               onClick={handleCanvasClick}
@@ -1482,6 +2157,8 @@ export default function App() {
                         tile={tile} 
                         hasArtefact={hasArtefact} 
                         isPowerUpActive={isPowerUpActive} 
+                        isThirdEyeActive={isThirdEyeActive}
+                        thirdEyeTimeLeft={thirdEyeTimeLeft}
                         powerUpTimeLeft={powerUpTimeLeft}
                         powerUpDuration={powerUpDuration}
                         tick={tick} 
@@ -1509,8 +2186,10 @@ export default function App() {
                     tile={{ ...m, rotation: 0, size: 1 }} 
                     hasArtefact={false} 
                     isPowerUpActive={false} 
+                    isThirdEyeActive={false}
+                    thirdEyeTimeLeft={0}
                     powerUpTimeLeft={0} 
-                    powerUpDuration={0} 
+                    powerUpDuration={powerUpDuration} 
                     tick={tick} 
                     mode={mode} 
                   />
@@ -1580,6 +2259,33 @@ export default function App() {
                   </Group>
                 )}
 
+                {/* Darkness Layer */}
+                {isDarknessOn && mode === 'play' && (
+                  <Rect
+                    x={0}
+                    y={0}
+                    width={CANVAS_WIDTH}
+                    height={CANVAS_HEIGHT}
+                    fillRadialGradientStartPoint={{ 
+                      x: playerPos.x * GRID_SIZE + GRID_SIZE/2, 
+                      y: playerPos.y * GRID_SIZE + GRID_SIZE/2 
+                    }}
+                    fillRadialGradientStartRadius={0}
+                    fillRadialGradientEndPoint={{ 
+                      x: playerPos.x * GRID_SIZE + GRID_SIZE/2, 
+                      y: playerPos.y * GRID_SIZE + GRID_SIZE/2 
+                    }}
+                    fillRadialGradientEndRadius={lightTime > 0 ? darknessRadius * GRID_SIZE * 1.6 : darknessRadius * GRID_SIZE}
+                    fillRadialGradientColorStops={[
+                      0, 'rgba(0,0,0,0)', 
+                      0.4, 'rgba(0,0,0,0)',
+                      0.8, 'rgba(0,0,0,1)',
+                      1, 'rgba(0,0,0,1)'
+                    ]}
+                    listening={false}
+                  />
+                )}
+
                 {/* Win State */}
                 {isWin && (
                   <Group x={CANVAS_WIDTH / 2 - 100} y={CANVAS_HEIGHT / 2 - 70}>
@@ -1622,17 +2328,35 @@ export default function App() {
 
                     <Group y={12}>
                       {isPowerUpActive && <Rect x={5} width={30} height={12} fill="#ec4899" cornerRadius={2} />}
-                      {speedBoostTime > 0 && <Rect x={40} width={30} height={12} fill="#6366f1" cornerRadius={2} />}
-                      {jumpBoostTime > 0 && <Rect x={75} width={30} height={12} fill="#f97316" cornerRadius={2} />}
-                      {lightTime > 0 && <Rect x={110} width={30} height={12} fill="#fef08a" cornerRadius={2} />}
-                      {slowMonstersTime > 0 && <Rect x={145} width={30} height={12} fill="#94a3b8" cornerRadius={2} />}
+                      {isThirdEyeActive && <Rect x={40} width={30} height={12} fill="#a855f7" cornerRadius={2} />}
+                      {speedBoostTime > 0 && <Rect x={75} width={30} height={12} fill="#6366f1" cornerRadius={2} />}
+                      {jumpBoostTime > 0 && <Rect x={110} width={30} height={12} fill="#f97316" cornerRadius={2} />}
+                      {lightTime > 0 && <Rect x={145} width={30} height={12} fill="#fef08a" cornerRadius={2} />}
+                      {slowMonstersTime > 0 && <Rect x={180} width={30} height={12} fill="#94a3b8" cornerRadius={2} />}
                       
                       <Text text="RUNES" fontSize={6} fill="white" x={8} y={3} fontStyle="bold" opacity={isPowerUpActive ? 1 : 0.2} />
-                      <Text text="SPEED" fontSize={6} fill="white" x={43} y={3} fontStyle="bold" opacity={speedBoostTime > 0 ? 1 : 0.2} />
-                      <Text text="JUMP" fontSize={6} fill="white" x={79} y={3} fontStyle="bold" opacity={jumpBoostTime > 0 ? 1 : 0.2} />
-                      <Text text="LIGHT" fontSize={6} fill="white" x={114} y={3} fontStyle="bold" opacity={lightTime > 0 ? 1 : 0.2} />
-                      <Text text="SLOW" fontSize={6} fill="white" x={150} y={3} fontStyle="bold" opacity={slowMonstersTime > 0 ? 1 : 0.2} />
+                      <Text text="EYE" fontSize={6} fill="white" x={48} y={3} fontStyle="bold" opacity={isThirdEyeActive ? 1 : 0.2} />
+                      <Text text="SPEED" fontSize={6} fill="white" x={78} y={3} fontStyle="bold" opacity={speedBoostTime > 0 ? 1 : 0.2} />
+                      <Text text="JUMP" fontSize={6} fill="white" x={114} y={3} fontStyle="bold" opacity={jumpBoostTime > 0 ? 1 : 0.2} />
+                      <Text text="LIGHT" fontSize={6} fill="white" x={149} y={3} fontStyle="bold" opacity={lightTime > 0 ? 1 : 0.2} />
+                      <Text text="SLOW" fontSize={6} fill="white" x={185} y={3} fontStyle="bold" opacity={slowMonstersTime > 0 ? 1 : 0.2} />
                     </Group>
+                    
+                    {/* Trapped Warning */}
+                    {trappedTime > 0 && (
+                      <Group y={35}>
+                        <Rect width={200} height={15} fill="rgba(239, 68, 68, 0.8)" cornerRadius={3} />
+                        <Text 
+                          text={`TRAPPED! DEATH IN ${10 - trappedTime}s`} 
+                          fontSize={8} 
+                          fill="white" 
+                          width={200} 
+                          align="center" 
+                          y={3} 
+                          fontStyle="bold" 
+                        />
+                      </Group>
+                    )}
                   </Group>
                 )}
               </Layer>
@@ -1640,7 +2364,7 @@ export default function App() {
 
             {/* Overlay Info */}
             {mode === 'build' && (
-              <div className="absolute bottom-4 right-4 pointer-events-none flex flex-col items-end gap-1">
+              <div className="absolute bottom-4 left-4 pointer-events-none flex flex-col items-start gap-1">
                 <div className="bg-zinc-900/80 backdrop-blur px-3 py-1.5 rounded border border-white/10 text-[10px] font-mono text-zinc-400">
                   TOOL: {buildTool.toUpperCase()} | {buildTool === 'place' ? 'L-CLICK: PLACE/ROTATE' : buildTool === 'move' ? (movingTileId ? 'CLICK EMPTY TO DROP' : 'CLICK TILE TO PICK UP') : 'CLICK TILE TO ' + buildTool.toUpperCase()}
                 </div>

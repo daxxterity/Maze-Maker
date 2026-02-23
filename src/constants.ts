@@ -32,12 +32,15 @@ export const TILE_LIBRARY: TileDefinition[] = [
   { type: 'obstacle-above', label: 'Slide', category: 'item', size: 1, color: '#f59e0b', description: 'Obstacle above' },
   { type: 'portal', label: 'Portal', category: 'item', size: 1, color: '#a855f7', description: 'Teleport between portals' },
   { type: 'exit', label: 'Exit', category: 'item', size: 1, color: '#7dd3fc', description: 'Reach to win' },
+  { type: 'web', label: 'Web', category: 'item', size: 1, color: '#ffffff', description: 'Sticky spider web' },
 
   // Artefacts
   { type: 'artefact', label: 'Artefact', category: 'artefact', size: 1, color: '#fbbf24', description: 'Collect to open exit' },
 
   // Power Ups
-  { type: 'mushroom', label: 'Runes', category: 'power-up', size: 1, color: '#ec4899', description: 'Reveal runes' },
+  { type: 'mushroom', label: 'Runes', category: 'power-up', size: 1, color: '#ec4899', description: 'See clues' },
+  { type: 'third-eye', label: 'Third Eye', category: 'power-up', size: 1, color: '#a855f7', description: 'Activate portals' },
+  { type: 'clue', label: 'Clue', category: 'power-up', size: 1, color: '#f472b6', description: 'Hidden tip' },
   { type: 'health-potion', label: 'Potion', category: 'power-up', size: 1, color: '#22c55e', description: '+25% Health' },
   { type: 'firefly', label: 'Firefly', category: 'power-up', size: 1, color: '#fef08a', description: 'Follow light' },
   { type: 'magic-tile', label: 'Magic', category: 'power-up', size: 1, color: '#6366f1', description: 'Speed x2' },

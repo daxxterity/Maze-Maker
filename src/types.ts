@@ -31,11 +31,14 @@ export type TileType =
   | 'orc'
   | 'teeth'
   | 'spider'
+  | 'web'
   | 'health-potion'
   | 'firefly'
   | 'magic-tile'
   | 'trampoline'
-  | 'lever';
+  | 'lever'
+  | 'third-eye'
+  | 'clue';
 
 export interface TriggerData {
   id: string;
@@ -52,6 +55,7 @@ export interface TileData {
   rotation: number; // 0, 90, 180, 270
   size: 1 | 2; // 1x1 or 2x2
   isNeutralized?: boolean;
+  clue?: string;
 }
 
 export interface DungeonMap {
@@ -60,6 +64,10 @@ export interface DungeonMap {
   triggers: TriggerData[];
   gridSize: number;
   powerUpDuration?: number;
+  darknessRadius?: number;
+  purpose?: string;
+  howTo?: string;
+  instructions?: string;
 }
 
 export type GameMode = 'build' | 'play';

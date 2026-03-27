@@ -1,0 +1,123 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: campaigns
+    // Fields: id, name, levelIds, sitemapId, createdAt, updatedAt
+    //
+    // Collection: levels
+    // Fields: id, name, data, authorId, authorEmail, createdAt
+    //
+    // Collection: sitemaps
+    // Fields: id, name, screens, createdAt
+    //
+    // Collection: users
+    // Fields: uid, email, role
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "marco@marcoantonio.org" && request.auth.token.email_verified == true));
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function uidUnchanged() {
+      return !('authorId' in request.resource.data) ||
+        request.resource.data.authorId == request.auth.uid;
+    }
+
+    function uidNotModified() {
+      return !('authorId' in request.resource.data) ||
+        request.resource.data.authorId == resource.data.authorId;
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+    function isValidCampaign(data) {
+      return hasOnlyAllowedFields(['id', 'name', 'levelIds', 'sitemapId', 'createdAt', 'updatedAt']) &&
+             data.id is string && data.id.size() > 0 && data.id.size() < 100 &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.levelIds is list && data.levelIds.size() < 50 &&
+             data.sitemapId is string && data.sitemapId.size() < 100;
+    }
+
+    function isValidLevel(data) {
+      return hasOnlyAllowedFields(['id', 'name', 'data', 'authorId', 'authorEmail', 'createdAt', 'updatedAt']) &&
+             data.id is string && data.id.size() > 0 && data.id.size() < 100 &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.data is map &&
+             (!('authorId' in data) || (data.authorId is string && data.authorId.size() < 100)) &&
+             (!('authorEmail' in data) || (data.authorEmail is string && data.authorEmail.size() < 200));
+    }
+
+    function isValidSitemap(data) {
+      return hasOnlyAllowedFields(['id', 'name', 'screens', 'createdAt', 'updatedAt']) &&
+             data.id is string && data.id.size() > 0 && data.id.size() < 100 &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.screens is list && data.screens.size() < 100;
+    }
+
+    function isValidUser(data) {
+      return hasOnlyAllowedFields(['uid', 'email', 'role']) &&
+             data.uid is string && data.uid.size() > 0 && data.uid.size() < 100 &&
+             data.email is string && data.email.size() > 0 && data.email.size() < 200 &&
+             data.role in ['admin', 'player'];
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && isOwner(userId);
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && (isOwner(userId) || isAdmin());
+    }
+
+    match /campaigns/{campaignId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidCampaign(request.resource.data);
+      allow update: if isAdmin() && isValidCampaign(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /levels/{levelId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isValidLevel(request.resource.data) && uidUnchanged();
+      allow update: if isAuthenticated() && isValidLevel(request.resource.data) && (isAdmin() || (resource.data.authorId == request.auth.uid && uidNotModified()));
+      allow delete: if isAdmin() || (isAuthenticated() && resource.data.authorId == request.auth.uid);
+    }
+
+    match /sitemaps/{sitemapId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidSitemap(request.resource.data);
+      allow update: if isAdmin() && isValidSitemap(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // Default deny
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}

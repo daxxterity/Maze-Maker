@@ -1,0 +1,112 @@
+{
+  "entities": {
+    "Campaign": {
+      "title": "Campaign",
+      "description": "A collection of levels and sitemap UI screens that form a complete game.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "levelIds": { 
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Ordered list of level IDs in the campaign."
+        },
+        "sitemapId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "levelIds", "sitemapId"]
+    },
+    "Level": {
+      "title": "Level",
+      "description": "A single dungeon level map data.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "authorId": { "type": "string", "description": "UID of the creator." },
+        "authorEmail": { "type": "string", "description": "Email of the creator." },
+        "data": { 
+          "type": "object", 
+          "description": "The full DungeonMap JSON object.",
+          "properties": {
+            "name": { "type": "string" },
+            "tiles": { "type": "array", "items": { "type": "object" } },
+            "triggers": { "type": "array", "items": { "type": "object" } },
+            "gridSize": { "type": "number" },
+            "gridCellsX": { "type": "number" },
+            "gridCellsY": { "type": "number" },
+            "levelTimeLimit": { "type": "number" },
+            "powerUpDuration": { "type": "number" },
+            "darknessRadius": { "type": "number" },
+            "purpose": { "type": "string" },
+            "howTo": { "type": "string" },
+            "instructions": { "type": "string" }
+          },
+          "required": ["name", "tiles", "triggers", "gridSize"]
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "data"]
+    },
+    "Sitemap": {
+      "title": "Sitemap",
+      "description": "UI screens and overlays exported from the Sitemap app.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "screens": { 
+          "type": "array",
+          "items": { 
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "title": { "type": "string" },
+              "content": { "type": "string" },
+              "type": { "type": "string", "enum": ["modal", "overlay", "lore", "success", "gameover"] },
+              "levelId": { "type": "string" },
+              "nextScreenId": { "type": "string" }
+            },
+            "required": ["id", "title", "content", "type"]
+          },
+          "description": "List of screen definitions from the sitemap."
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "screens"]
+    },
+    "User": {
+      "title": "User",
+      "description": "User profile and role information.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "player"] }
+      },
+      "required": ["uid", "email", "role"]
+    }
+  },
+  "firestore": {
+    "campaigns/{campaignId}": {
+      "schema": "Campaign",
+      "description": "Campaign definitions."
+    },
+    "levels/{levelId}": {
+      "schema": "Level",
+      "description": "Dungeon level data."
+    },
+    "sitemaps/{sitemapId}": {
+      "schema": "Sitemap",
+      "description": "Sitemap UI data."
+    },
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User profiles."
+    }
+  }
+}

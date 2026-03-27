@@ -1,5 +1,8 @@
 export type TileType = 
   | 'corridor' 
+  | 'corridor-x2'
+  | 'corridor-x5'
+  | 'corridor-diag'
   | 'corner' 
   | 't-junction' 
   | 'open-floor' 
@@ -9,7 +12,6 @@ export type TileType =
   | 'lava'
   | 'water'
   | 'bridge'
-  | 'stairs'
   | 'column'
   | 'door'
   | 'rotating-wall'
@@ -18,13 +20,18 @@ export type TileType =
   | 'obstacle-above'
   | 'patio'
   | 'tree'
+  | 'tree-single'
   | 'rotating-wall-l'
   | 'rotating-wall-i'
   | 'rotating-wall-plus'
-  | 'tile-above'
-  | 'tile-below'
   | 'trigger'
   | 'artefact'
+  | 'artefact-shield'
+  | 'artefact-rod'
+  | 'artefact-cloak'
+  | 'artefact-boots'
+  | 'artefact-jumper'
+  | 'artefact-runner'
   | 'exit'
   | 'portal'
   | 'mushroom'
@@ -38,13 +45,21 @@ export type TileType =
   | 'trampoline'
   | 'lever'
   | 'third-eye'
-  | 'clue';
+  | 'stairs-up'
+  | 'stairs-down'
+  | 'hole'
+  | 'clue'
+  | 'spike-pit'
+  | 'speed'
+  | 'key'
+  | 'open-floor-x5';
 
 export interface TriggerData {
   id: string;
   targetId: string;
   x: number;
   y: number;
+  z?: number;
 }
 
 export interface TileData {
@@ -52,8 +67,11 @@ export interface TileData {
   type: TileType;
   x: number; // grid x
   y: number; // grid y
+  z?: number; // grid z (floor level)
   rotation: number; // 0, 90, 180, 270
-  size: 1 | 2; // 1x1 or 2x2
+  size: number; // 1x1 or 2x2
+  width?: number;
+  height?: number;
   isNeutralized?: boolean;
   clue?: string;
 }
@@ -63,6 +81,9 @@ export interface DungeonMap {
   tiles: TileData[];
   triggers: TriggerData[];
   gridSize: number;
+  gridCellsX?: number;
+  gridCellsY?: number;
+  levelTimeLimit?: number;
   powerUpDuration?: number;
   darknessRadius?: number;
   purpose?: string;
@@ -70,4 +91,39 @@ export interface DungeonMap {
   instructions?: string;
 }
 
-export type GameMode = 'build' | 'play';
+export type GameMode = 'build' | 'play' | 'admin';
+
+export interface CampaignData {
+  id: string;
+  name: string;
+  levelIds: string[];
+  sitemapId: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface LevelData {
+  id: string;
+  name: string;
+  authorId?: string;
+  authorEmail?: string;
+  data: DungeonMap;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface SitemapScreen {
+  id: string;
+  title: string;
+  content: string;
+  type: 'modal' | 'overlay' | 'lore' | 'success' | 'gameover';
+  levelId?: string;
+  nextScreenId?: string;
+}
+
+export interface SitemapData {
+  id: string;
+  name: string;
+  screens: SitemapScreen[];
+  createdAt?: string;
+}

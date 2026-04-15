@@ -39,6 +39,6 @@ jobs:
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           local-dir: ./dist/
-          server-dir: /public_html/level-architect.marcoantonio.org/
+          server-dir: /public_html/level-architect.marcoantonio.org/architect
           # Set to true if you want to delete files on the server that are not in the local-dir
           delete: false 

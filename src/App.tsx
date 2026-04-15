@@ -3960,7 +3960,7 @@ export default function App() {
             )}
 
             {/* Level Management Trigger */}
-            {mode === 'build' && (
+            {mode === 'build' && user && (
               <button
                 onClick={() => setShowLevelMgmtModal(true)}
                 className="w-10 h-10 flex items-center justify-center bg-amber-600/20 border border-amber-500/30 rounded-lg text-amber-500 hover:bg-amber-600/30 transition-all shadow-lg shadow-amber-900/10 group"
@@ -4555,7 +4555,7 @@ export default function App() {
 
           <div 
             ref={containerRef}
-            className="flex-1 relative shadow-[0_0_100px_rgba(0,0,0,0.5)] border border-white/5 rounded-lg overflow-hidden bg-zinc-900"
+            className="flex-1 relative shadow-[0_0_100px_rgba(0,0,0,0.5)] border border-white/5 rounded-lg overflow-hidden bg-[#09090b]"
           >
             {mode === 'play' && (
               <>
@@ -4716,7 +4716,7 @@ export default function App() {
               draggable={pressedKeys.has(' ') || mode === 'build'}
               onDragEnd={(e) => setStagePos({ x: e.target.x(), y: e.target.y() })}
               ref={stageRef}
-              style={{ backgroundColor: '#18181b' }} // zinc-900
+              style={{ backgroundColor: '#09090b' }} 
             >
               <Layer>
                 {/* Dungeon Floor Background */}

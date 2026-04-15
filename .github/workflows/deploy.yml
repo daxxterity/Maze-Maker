@@ -40,4 +40,5 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           local-dir: ./dist/
           server-dir: /
-          delete: false
+          # Set to true if you want to delete files on the server that are not in the local-dir
+          delete: false 

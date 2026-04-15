@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { db } from '../firebase';
+import { db, isFirebaseConfigured } from '../firebase';
 import { 
   collection, 
   onSnapshot, 
@@ -37,6 +37,11 @@ export const DungeonDataProvider = ({ children }: { children: ReactNode }) => {
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
+    if (!isFirebaseConfigured) {
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     
     // Listen to Campaigns
@@ -85,7 +90,7 @@ export const DungeonDataProvider = ({ children }: { children: ReactNode }) => {
 
   // UID Scoping: Listen to User's Levels
   useEffect(() => {
-    if (!user) {
+    if (!isFirebaseConfigured || !user) {
       setUserLevels([]);
       return;
     }

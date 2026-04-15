@@ -49,7 +49,7 @@ import {
 import { cn } from './lib/utils';
 import { TileType, TileData, GameMode, DungeonMap, TriggerData, CampaignData, LevelData, SitemapData, SitemapScreen } from './types';
 import { TILE_LIBRARY, TileDefinition } from './constants';
-import { db, auth } from './firebase';
+import { db, auth, isFirebaseConfigured } from './firebase';
 import { 
   collection, 
   doc, 
@@ -117,10 +117,17 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
         const parsed = JSON.parse(this.state.error?.message || "{}");
         if (parsed.error) {
           errorMessage = parsed.error;
-          if (errorMessage.toLowerCase().includes('quota exceeded') || errorMessage.toLowerCase().includes('quota')) {
+          const lowerError = errorMessage.toLowerCase();
+          
+          if (lowerError.includes('quota exceeded') || lowerError.includes('quota')) {
             isQuotaError = true;
           }
-          errorMessage = `Firestore Error: ${errorMessage} (${parsed.operationType} on ${parsed.path})`;
+          
+          if (lowerError.includes('offline')) {
+            errorMessage = "Firestore is reporting as 'Offline'. This usually means your Project ID is incorrect, or the Firestore Database has not been created yet in the Firebase Console.";
+          } else {
+            errorMessage = `Firestore Error: ${errorMessage} (${parsed.operationType} on ${parsed.path})`;
+          }
         }
       } catch {
         errorMessage = this.state.error?.message || errorMessage;
@@ -1832,6 +1839,10 @@ export default function App() {
   // Handled by DungeonDataContext
 
   const handleLogin = async () => {
+    if (!isFirebaseConfigured) {
+      alert("Firebase is not configured. Please set the VITE_FIREBASE_API_KEY and other variables in your environment.");
+      return;
+    }
     const provider = new GoogleAuthProvider();
     try {
       await signInWithPopup(auth, provider);
@@ -1841,6 +1852,7 @@ export default function App() {
   };
 
   const handleLogout = async () => {
+    if (!isFirebaseConfigured) return;
     try {
       await signOut(auth);
     } catch (error) {
@@ -3553,7 +3565,26 @@ export default function App() {
         "flex flex-col h-screen bg-[#141414] text-zinc-100 font-sans overflow-hidden",
         isEmbed && "bg-black"
       )}>
-      {/* Clear Confirmation Modal */}
+        {!isFirebaseConfigured && !isEmbed && (
+          <div className="bg-amber-500/10 border-b border-amber-500/20 px-6 py-2 flex items-center justify-between z-50">
+            <div className="flex items-center gap-3">
+              <AlertCircle size={14} className="text-amber-500" />
+              <p className="text-[10px] font-bold uppercase tracking-widest text-amber-200">
+                Firebase Not Configured: Cloud saving and authentication are disabled.
+              </p>
+            </div>
+            <a 
+              href="https://console.firebase.google.com/" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-[9px] font-bold uppercase tracking-widest text-amber-500 hover:text-amber-400 transition-colors underline underline-offset-4"
+            >
+              Setup Firebase
+            </a>
+          </div>
+        )}
+        
+        {/* Clear Confirmation Modal */}
       <AnimatePresence>
         {showClearConfirmModal && (
           <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">

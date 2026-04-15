@@ -3,7 +3,7 @@ import { TileType } from "./types";
 export interface TileDefinition {
   type: TileType;
   label: string;
-  category: 'corridor' | 'item' | 'quad' | 'power-up' | 'monster' | 'artefact';
+  category: 'corridor' | 'items' | 'quad' | 'power-up' | 'monster' | 'artefact';
   size: number;
   width?: number;
   height?: number;
@@ -25,24 +25,25 @@ export const TILE_LIBRARY: TileDefinition[] = [
   { type: 'cul-de-sac', label: 'Cul-de-sac', category: 'corridor', size: 1, color: '#4b5563', description: 'Dead end' },
   
   // Items
-  { type: 'entrance', label: 'Entrance', category: 'item', size: 1, color: '#10b981', description: 'Starting point' },
-  { type: 'lava', label: 'Lava', category: 'item', size: 1, color: '#ef4444', description: 'Dangerous terrain' },
-  { type: 'spike-pit', label: 'Spike Pit', category: 'item', size: 1, color: '#94a3b8', description: 'Dangerous spikes' },
-  { type: 'water', label: 'Water', category: 'item', size: 1, color: '#3b82f6', description: 'Impassable terrain' },
-  { type: 'bridge', label: 'Bridge', category: 'item', size: 1, color: '#92400e', description: 'Cross over water/lava' },
-  { type: 'column', label: 'Column', category: 'item', size: 1, color: '#1f2937', description: 'Solid obstacle' },
-  { type: 'tree-single', label: 'Tree (S)', category: 'item', size: 1, color: '#065f46', description: 'Single tile tree' },
-  { type: 'door', label: 'Door', category: 'item', size: 1, color: '#d97706', description: 'Passable barrier' },
-  { type: 'rotating-wall', label: 'Rot. Wall', category: 'item', size: 1, color: '#6366f1', description: 'Moves on trigger' },
-  { type: 'obstacle-half-w', label: 'Swerve', category: 'item', size: 1, color: '#f59e0b', description: 'Half-width obstacle' },
-  { type: 'obstacle-half-h', label: 'Jump', category: 'item', size: 1, color: '#f59e0b', description: 'Half-height obstacle' },
-  { type: 'obstacle-above', label: 'Slide', category: 'item', size: 1, color: '#f59e0b', description: 'Obstacle above' },
-  { type: 'portal', label: 'Portal', category: 'item', size: 1, color: '#a855f7', description: 'Teleport between portals' },
-  { type: 'exit', label: 'Exit', category: 'item', size: 1, color: '#7dd3fc', description: 'Reach to win' },
-  { type: 'web', label: 'Web', category: 'item', size: 1, color: '#ffffff', description: 'Sticky spider web' },
-  { type: 'stairs-up', label: 'Stairs Up', category: 'item', size: 1, color: '#92400e', description: 'Go to floor above' },
-  { type: 'stairs-down', label: 'Stairs Down', category: 'item', size: 1, color: '#78350f', description: 'Go to floor below' },
-  { type: 'hole', label: 'Hole', category: 'item', size: 1, color: '#000000', description: 'Fall to floor below' },
+  { type: 'entrance', label: 'Entrance', category: 'items', size: 1, color: '#10b981', description: 'Starting point' },
+  { type: 'lava', label: 'Lava', category: 'items', size: 1, color: '#ef4444', description: 'Dangerous terrain' },
+  { type: 'spike-pit', label: 'Spike Pit', category: 'items', size: 1, color: '#94a3b8', description: 'Dangerous spikes' },
+  { type: 'water', label: 'Water', category: 'items', size: 1, color: '#3b82f6', description: 'Impassable terrain' },
+  { type: 'bridge', label: 'Bridge', category: 'items', size: 1, color: '#92400e', description: 'Cross over water/lava' },
+  { type: 'column', label: 'Column', category: 'items', size: 1, color: '#1f2937', description: 'Solid obstacle' },
+  { type: 'tree-single', label: 'Tree (S)', category: 'items', size: 1, color: '#065f46', description: 'Single tile tree' },
+  { type: 'door', label: 'Door', category: 'items', size: 1, color: '#d97706', description: 'Passable barrier' },
+  { type: 'rotating-wall', label: 'Rot. Wall', category: 'items', size: 1, color: '#6366f1', description: 'Moves on trigger' },
+  { type: 'obstacle-half-w', label: 'Swerve', category: 'items', size: 1, color: '#f59e0b', description: 'Half-width obstacle' },
+  { type: 'obstacle-half-h', label: 'Jump', category: 'items', size: 1, color: '#f59e0b', description: 'Half-height obstacle' },
+  { type: 'obstacle-above', label: 'Slide', category: 'items', size: 1, color: '#f59e0b', description: 'Obstacle above' },
+  { type: 'portal', label: 'Portal', category: 'items', size: 1, color: '#a855f7', description: 'Teleport between portals' },
+  { type: 'exit', label: 'Exit', category: 'items', size: 1, color: '#7dd3fc', description: 'Reach to win' },
+  { type: 'message', label: 'Message', category: 'items', size: 1, color: '#fcd34d', description: 'Displays a message' },
+  { type: 'web', label: 'Web', category: 'items', size: 1, color: '#ffffff', description: 'Sticky spider web' },
+  { type: 'stairs-up', label: 'Stairs Up', category: 'items', size: 1, color: '#92400e', description: 'Go to floor above' },
+  { type: 'stairs-down', label: 'Stairs Down', category: 'items', size: 1, color: '#78350f', description: 'Go to floor below' },
+  { type: 'hole', label: 'Hole', category: 'items', size: 1, color: '#000000', description: 'Fall to floor below' },
 
   // Artefacts
   { type: 'artefact', label: 'Artefact', category: 'artefact', size: 1, color: '#fbbf24', description: 'Collect to open exit' },

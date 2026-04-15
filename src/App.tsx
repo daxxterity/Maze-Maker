@@ -58,10 +58,6 @@ import {
   setDoc, 
   addDoc,
   updateDoc, 
-  onSnapshot, 
-  query, 
-  where, 
-  orderBy, 
   serverTimestamp,
   deleteDoc
 } from 'firebase/firestore';
@@ -73,14 +69,7 @@ import {
   User as FirebaseUser
 } from 'firebase/auth';
 
-enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
-}
+import { handleFirestoreError, OperationType } from './lib/firestoreUtils';
 
 function sanitizeFirestoreData(data: any): any {
   if (Array.isArray(data)) {
@@ -106,47 +95,8 @@ function sanitizeFirestoreData(data: any): any {
   return data;
 }
 
-interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId?: string;
-    email?: string | null;
-    emailVerified?: boolean;
-    isAnonymous?: boolean;
-    tenantId?: string | null;
-    providerInfo: {
-      providerId: string;
-      displayName: string | null;
-      email: string | null;
-      photoUrl: string | null;
-    }[];
-  }
-}
-
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData.map(provider => ({
-        providerId: provider.providerId,
-        displayName: provider.displayName,
-        email: provider.email,
-        photoUrl: provider.photoURL
-      })) || []
-    },
-    operationType,
-    path
-  }
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
-}
+import { useUser } from './contexts/UserContext';
+import { useDungeonData } from './contexts/DungeonDataContext';
 
 class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean, error: Error | null }> {
   constructor(props: { children: React.ReactNode }) {
@@ -161,29 +111,60 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
   render() {
     if (this.state.hasError) {
       let errorMessage = "Something went wrong.";
+      let isQuotaError = false;
+      
       try {
         const parsed = JSON.parse(this.state.error?.message || "{}");
-        if (parsed.error) errorMessage = `Firestore Error: ${parsed.error} (${parsed.operationType} on ${parsed.path})`;
+        if (parsed.error) {
+          errorMessage = parsed.error;
+          if (errorMessage.toLowerCase().includes('quota exceeded') || errorMessage.toLowerCase().includes('quota')) {
+            isQuotaError = true;
+          }
+          errorMessage = `Firestore Error: ${errorMessage} (${parsed.operationType} on ${parsed.path})`;
+        }
       } catch {
         errorMessage = this.state.error?.message || errorMessage;
+        if (errorMessage.toLowerCase().includes('quota exceeded') || errorMessage.toLowerCase().includes('quota')) {
+          isQuotaError = true;
+        }
       }
 
       return (
         <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/90 p-6 text-center">
-          <div className="max-w-md w-full bg-zinc-900 border border-red-500/50 rounded-3xl p-8 shadow-2xl">
-            <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
-              <AlertCircle className="text-red-500" size={32} />
+          <div className={cn(
+            "max-w-md w-full bg-zinc-900 border rounded-3xl p-8 shadow-2xl",
+            isQuotaError ? "border-amber-500/50" : "border-red-500/50"
+          )}>
+            <div className={cn(
+              "w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6",
+              isQuotaError ? "bg-amber-500/20" : "bg-red-500/20"
+            )}>
+              {isQuotaError ? <Zap className="text-amber-500" size={32} /> : <AlertCircle className="text-red-500" size={32} />}
             </div>
-            <h2 className="text-2xl font-bold text-white mb-4">Application Error</h2>
+            <h2 className="text-2xl font-bold text-white mb-4">
+              {isQuotaError ? "Dungeon at Capacity" : "Application Error"}
+            </h2>
             <p className="text-zinc-400 mb-8 font-mono text-sm break-words">
-              {errorMessage}
+              {isQuotaError 
+                ? "The daily magic quota for this dungeon has been exhausted. The spirits are resting and will return tomorrow."
+                : errorMessage}
             </p>
-            <button
-              onClick={() => window.location.reload()}
-              className="w-full py-4 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl transition-all active:scale-95"
-            >
-              Reload Application
-            </button>
+            <div className="space-y-3">
+              <button
+                onClick={() => window.location.reload()}
+                className={cn(
+                  "w-full py-4 text-white font-bold rounded-xl transition-all active:scale-95",
+                  isQuotaError ? "bg-amber-600 hover:bg-amber-500" : "bg-red-600 hover:bg-red-500"
+                )}
+              >
+                Try Reconnecting
+              </button>
+              {isQuotaError && (
+                <p className="text-[10px] text-zinc-500 uppercase tracking-widest">
+                  Quota resets daily at midnight Pacific Time
+                </p>
+              )}
+            </div>
           </div>
         </div>
       );
@@ -309,7 +290,7 @@ const TileRenderer = ({
 }) => {
   const { type, x, y, rotation, size } = tile;
   const tileDef = TILE_LIBRARY.find(t => t.type === type);
-  const isItem = tileDef?.category === 'item';
+  const isItem = tileDef?.category === 'items';
   const isPowerUp = tileDef?.category === 'power-up';
   const isMonster = tileDef?.category === 'monster';
   const isCorridor = tileDef?.category === 'corridor';
@@ -806,6 +787,16 @@ const TileRenderer = ({
             <Circle x={drawCenter} y={drawCenter} radius={drawSize/4} fill="black" />
           </Group>
         );
+      case 'message':
+        return (
+          <Group x={drawOffset} y={drawOffset}>
+            <Rect width={drawSize} height={drawSize} fill="#fcd34d" cornerRadius={4} />
+            <Rect x={4} y={4} width={drawSize-8} height={2} fill="#92400e" opacity={0.3} />
+            <Rect x={4} y={8} width={drawSize-8} height={2} fill="#92400e" opacity={0.3} />
+            <Rect x={4} y={12} width={drawSize-12} height={2} fill="#92400e" opacity={0.3} />
+            <Text text="MSG" fontSize={6} fill="#92400e" x={2} y={drawSize - 8} fontStyle="bold" />
+          </Group>
+        );
       case 'web':
         return (
           <Group x={drawOffset} y={drawOffset}>
@@ -936,10 +927,12 @@ const AdminDashboard = ({
   onExport,
   onImport,
   onLoadLevel,
-  onPlayCampaign
+  onPlayCampaign,
+  userLevels
 }: { 
   onClose: () => void,
   levels: LevelData[],
+  userLevels: LevelData[],
   sitemaps: SitemapData[],
   campaigns: CampaignData[],
   isSaving: boolean,
@@ -1005,7 +998,7 @@ const AdminDashboard = ({
               tab === 'levels' ? "border-amber-500 text-amber-500 bg-amber-500/5" : "border-transparent text-zinc-500 hover:text-zinc-300"
             )}
           >
-            Levels ({levels.length})
+            Levels ({userLevels.length} Mine / {levels.length} Global)
           </button>
           <button 
             onClick={() => setTab('sitemaps')}
@@ -1068,9 +1061,9 @@ const AdminDashboard = ({
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-zinc-500 uppercase">Level Order (Drag to reorder - Coming Soon)</label>
-                    <div className="space-y-2">
-                      {levels.map(level => {
+                    <label className="text-[10px] font-bold text-zinc-500 uppercase">Select Levels for Campaign</label>
+                    <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
+                      {[...userLevels, ...levels.filter(l => !userLevels.find(ul => ul.id === l.id))].map(level => {
                         const isSelected = editingCampaign.levelIds?.includes(level.id);
                         return (
                           <button 
@@ -1166,62 +1159,106 @@ const AdminDashboard = ({
           )}
 
           {tab === 'levels' && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-white">Dungeon Levels</h3>
-                <label className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg transition-all cursor-pointer">
-                  <Upload size={16} />
-                  Upload Level JSON
-                  <input 
-                    type="file" 
-                    className="hidden" 
-                    accept=".json"
-                    onChange={(e) => e.target.files?.[0] && onUploadLevel(e.target.files[0])}
-                  />
-                </label>
+            <div className="space-y-8">
+              {/* My Levels */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-indigo-500" />
+                    <h3 className="text-lg font-bold text-white tracking-tight">My Dungeons</h3>
+                  </div>
+                  <label className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg transition-all cursor-pointer">
+                    <Upload size={16} />
+                    Upload Level JSON
+                    <input 
+                      type="file" 
+                      className="hidden" 
+                      accept=".json"
+                      onChange={(e) => e.target.files?.[0] && onUploadLevel(e.target.files[0])}
+                    />
+                  </label>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  {userLevels.map(level => (
+                    <div key={level.id} className="bg-zinc-950/50 border border-indigo-500/20 rounded-xl p-4 flex items-center justify-between group hover:border-indigo-500/50 transition-all">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-500">
+                          <FileJson size={20} />
+                        </div>
+                        <div>
+                          <div className="text-sm font-bold text-white">{level.name}</div>
+                          <div className="text-[10px] text-zinc-500">{level.data.tiles.length} Tiles • Private</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={() => onLoadLevel(level)}
+                          className="p-2 hover:bg-white/5 rounded-lg text-zinc-400 hover:text-emerald-400 opacity-0 group-hover:opacity-100 transition-all flex items-center gap-1.5"
+                          title="Load into Canvas"
+                        >
+                          <Play size={16} />
+                          <span className="text-[10px] font-bold uppercase">Load</span>
+                        </button>
+                        <button 
+                          onClick={() => {
+                            const url = `${window.location.origin}?embed=true&levelId=${level.id}`;
+                            navigator.clipboard.writeText(`<iframe src="${url}" width="1000" height="800" frameborder="0"></iframe>`);
+                            alert("Embed code copied to clipboard!");
+                          }}
+                          className="p-2 hover:bg-white/5 rounded-lg text-zinc-400 hover:text-cyan-400 opacity-0 group-hover:opacity-100 transition-all"
+                          title="Copy Embed Code"
+                        >
+                          <Share2 size={16} />
+                        </button>
+                        <button 
+                          onClick={() => onDeleteLevel(level.id)}
+                          className="p-2 hover:bg-red-500/10 rounded-lg text-zinc-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {userLevels.length === 0 && (
+                    <div className="col-span-2 py-8 text-center border border-dashed border-white/5 rounded-xl text-zinc-600 text-xs italic">
+                      You haven't created any dungeons yet.
+                    </div>
+                  )}
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                {levels.map(level => (
-                  <div key={level.id} className="bg-zinc-950/50 border border-white/5 rounded-xl p-4 flex items-center justify-between group hover:border-indigo-500/30 transition-all">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-500">
-                        <FileJson size={20} />
+              {/* Global Levels */}
+              <div className="space-y-4 opacity-70 hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-zinc-600" />
+                  <h3 className="text-sm font-bold text-zinc-400 uppercase tracking-widest">Global Library (Recent)</h3>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  {levels.filter(l => !userLevels.find(ul => ul.id === l.id)).map(level => (
+                    <div key={level.id} className="bg-zinc-950/20 border border-white/5 rounded-xl p-4 flex items-center justify-between group hover:border-white/20 transition-all">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-zinc-800 flex items-center justify-center text-zinc-500">
+                          <Ghost size={20} />
+                        </div>
+                        <div>
+                          <div className="text-sm font-bold text-zinc-400">{level.name}</div>
+                          <div className="text-[10px] text-zinc-600">{level.data.tiles.length} Tiles</div>
+                        </div>
                       </div>
-                      <div>
-                        <div className="text-sm font-bold text-white">{level.name}</div>
-                        <div className="text-[10px] text-zinc-500">{level.data.tiles.length} Tiles</div>
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={() => onLoadLevel(level)}
+                          className="p-2 hover:bg-white/5 rounded-lg text-zinc-400 hover:text-emerald-400 opacity-0 group-hover:opacity-100 transition-all flex items-center gap-1.5"
+                          title="Load into Canvas"
+                        >
+                          <Play size={16} />
+                          <span className="text-[10px] font-bold uppercase">Load</span>
+                        </button>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button 
-                        onClick={() => onLoadLevel(level)}
-                        className="p-2 hover:bg-white/5 rounded-lg text-zinc-400 hover:text-emerald-400 opacity-0 group-hover:opacity-100 transition-all flex items-center gap-1.5"
-                        title="Load into Canvas"
-                      >
-                        <Play size={16} />
-                        <span className="text-[10px] font-bold uppercase">Load</span>
-                      </button>
-                      <button 
-                        onClick={() => {
-                          const url = `${window.location.origin}?embed=true&levelId=${level.id}`;
-                          navigator.clipboard.writeText(`<iframe src="${url}" width="1000" height="800" frameborder="0"></iframe>`);
-                          alert("Embed code copied to clipboard!");
-                        }}
-                        className="p-2 hover:bg-white/5 rounded-lg text-zinc-400 hover:text-cyan-400 opacity-0 group-hover:opacity-100 transition-all"
-                        title="Copy Embed Code"
-                      >
-                        <Share2 size={16} />
-                      </button>
-                      <button 
-                        onClick={() => onDeleteLevel(level.id)}
-                        className="p-2 hover:bg-red-500/10 rounded-lg text-zinc-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </div>
           )}
@@ -1645,20 +1682,39 @@ export default function App() {
   const [isModalCollapsed, setIsModalCollapsed] = useState(false);
   const [modalPos, setModalPos] = useState({ x: 24, y: 24 });
   const [tick, setTick] = useState(0);
+  const [textEditModal, setTextEditModal] = useState<{
+    isOpen: boolean;
+    tileId: string | null;
+    text: string;
+    type: 'message' | 'clue';
+    mode: 'edit' | 'view';
+  }>({ isOpen: false, tileId: null, text: '', type: 'message', mode: 'view' });
+  const [showLevelMgmtModal, setShowLevelMgmtModal] = useState(false);
+
+  const tilesRef = useRef<TileData[]>([]);
+  useEffect(() => {
+    tilesRef.current = tiles;
+  }, [tiles]);
+
+  const { user, isAdminUser, isLoading: isAuthLoading } = useUser();
+  const { 
+    campaigns, 
+    levels, 
+    userLevels,
+    sitemaps, 
+    setCampaigns, 
+    setLevels, 
+    setSitemaps, 
+    isLoading: isDataLoading 
+  } = useDungeonData();
 
   // --- Campaign & Admin State ---
-  const [user, setUser] = useState<FirebaseUser | null>(null);
-  const [isAdminUser, setIsAdminUser] = useState(false);
-  const [campaigns, setCampaigns] = useState<CampaignData[]>([]);
   const [activeCampaign, setActiveCampaign] = useState<CampaignData | null>(null);
   const [currentLevelIndex, setCurrentLevelIndex] = useState(0);
   const [sitemap, setSitemap] = useState<SitemapData | null>(null);
   const [activeSitemapScreen, setActiveSitemapScreen] = useState<SitemapScreen | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [adminTab, setAdminTab] = useState<'campaigns' | 'levels' | 'sitemaps'>('campaigns');
-  const [levels, setLevels] = useState<LevelData[]>([]);
-  const [sitemaps, setSitemaps] = useState<SitemapData[]>([]);
   const [playTime, setPlayTime] = useState(0);
   const [monsters, setMonsters] = useState<{ 
     id: string, 
@@ -1770,57 +1826,10 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // --- Firebase Auth ---
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      setUser(firebaseUser);
-      if (firebaseUser) {
-        // Check if user is admin
-        try {
-          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-          if (userDoc.exists()) {
-            setIsAdminUser(userDoc.data().role === 'admin');
-          } else {
-            // Default admin for the specific email
-            const isAdmin = firebaseUser.email === "marco@marcoantonio.org" || firebaseUser.email === "imanol.martin@gmail.com";
-            setIsAdminUser(isAdmin);
-            // Create user doc
-            await setDoc(doc(db, 'users', firebaseUser.uid), {
-              uid: firebaseUser.uid,
-              email: firebaseUser.email,
-              role: isAdmin ? 'admin' : 'player'
-            });
-          }
-        } catch (error) {
-          handleFirestoreError(error, OperationType.GET, `users/${firebaseUser.uid}`);
-        }
-      } else {
-        setIsAdminUser(false);
-      }
-      setIsLoading(false);
-    });
-    return () => unsubscribe();
-  }, []);
+  // Handled by UserContext
 
   // --- Load Campaigns, Levels, Sitemaps ---
-  useEffect(() => {
-    const unsubCampaigns = onSnapshot(collection(db, 'campaigns'), (snapshot) => {
-      setCampaigns(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CampaignData)));
-    }, (error) => handleFirestoreError(error, OperationType.LIST, 'campaigns'));
-
-    const unsubLevels = onSnapshot(collection(db, 'levels'), (snapshot) => {
-      setLevels(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LevelData)));
-    }, (error) => handleFirestoreError(error, OperationType.LIST, 'levels'));
-
-    const unsubSitemaps = onSnapshot(collection(db, 'sitemaps'), (snapshot) => {
-      setSitemaps(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SitemapData)));
-    }, (error) => handleFirestoreError(error, OperationType.LIST, 'sitemaps'));
-
-    return () => {
-      unsubCampaigns();
-      unsubLevels();
-      unsubSitemaps();
-    };
-  }, []);
+  // Handled by DungeonDataContext
 
   const handleLogin = async () => {
     const provider = new GoogleAuthProvider();
@@ -1903,18 +1912,29 @@ export default function App() {
     reader.readAsText(file);
   };
 
+  const sitemapUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const handleUpdateSitemap = async (sitemap: SitemapData) => {
-    setIsSaving(true);
-    try {
-      await updateDoc(doc(db, 'sitemaps', sitemap.id), sanitizeFirestoreData({
-        ...sitemap,
-        updatedAt: serverTimestamp()
-      }));
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `sitemaps/${sitemap.id}`);
-    } finally {
-      setIsSaving(false);
+    // Optimistically update local state to keep UI responsive
+    setSitemaps(prev => prev.map(s => s.id === sitemap.id ? sitemap : s));
+    
+    // Debounce the Firestore update
+    if (sitemapUpdateTimeoutRef.current) {
+      clearTimeout(sitemapUpdateTimeoutRef.current);
     }
+    
+    sitemapUpdateTimeoutRef.current = setTimeout(async () => {
+      setIsSaving(true);
+      try {
+        await updateDoc(doc(db, 'sitemaps', sitemap.id), sanitizeFirestoreData({
+          ...sitemap,
+          updatedAt: serverTimestamp()
+        }));
+      } catch (error) {
+        handleFirestoreError(error, OperationType.UPDATE, `sitemaps/${sitemap.id}`);
+      } finally {
+        setIsSaving(false);
+      }
+    }, 1000); // 1 second debounce
   };
 
   const handleDeleteCampaign = async (id: string) => {
@@ -1977,7 +1997,7 @@ export default function App() {
     setTimeLeft(levelTimeLimit);
     setCurrentZ(0);
     
-    const currentTiles = tilesOverride || tiles;
+    const currentTiles = tilesOverride || tilesRef.current;
     const entrance = currentTiles.find(t => t.type === 'entrance');
     if (entrance) {
       setPlayerPos({ x: entrance.x, y: entrance.y, z: entrance.z || 0 });
@@ -1996,7 +2016,7 @@ export default function App() {
         id: m.id
       })));
     }
-  }, [tiles, levelTimeLimit]);
+  }, [levelTimeLimit]);
 
   const loadLevel = useCallback((levelId: string) => {
     const level = levels.find(l => l.id === levelId);
@@ -2014,9 +2034,13 @@ export default function App() {
   }, [levels, resetGameState]);
 
   // URL Parameter Handling for Embeds
+  const embedProcessed = useRef(false);
   useEffect(() => {
+    if (embedProcessed.current) return;
+    
     const params = new URLSearchParams(window.location.search);
     if (params.get('embed') === 'true') {
+      embedProcessed.current = true;
       setMode('play');
       setSidebarOpen(false);
       const lvlId = params.get('levelId');
@@ -2038,9 +2062,12 @@ export default function App() {
 
   useEffect(() => {
     if (activeCampaign && activeCampaign.levelIds.length > 0) {
-      loadLevel(activeCampaign.levelIds[currentLevelIndex]);
+      const nextLevelId = activeCampaign.levelIds[currentLevelIndex];
+      if (nextLevelId !== currentLevelId) {
+        loadLevel(nextLevelId);
+      }
     }
-  }, [activeCampaign, currentLevelIndex, loadLevel]);
+  }, [activeCampaign, currentLevelIndex, loadLevel, currentLevelId]);
 
   useEffect(() => {
     if (activeCampaign && activeCampaign.sitemapId) {
@@ -2614,7 +2641,7 @@ export default function App() {
           if (cat === 'artefact') return 5;
           if (cat === 'power-up') return 4;
           if (cat === 'monster') return 3;
-          if (cat === 'item') return 2;
+          if (cat === 'items') return 2;
           return 1;
         };
         return priority(catB) - priority(catA);
@@ -2694,7 +2721,7 @@ export default function App() {
     const tileDef = TILE_LIBRARY.find(t => t.type === selectedTileType);
     if (!tileDef) return;
 
-    const isItem = tileDef.category === 'item';
+    const isItem = tileDef.category === 'items';
     const isPowerUp = tileDef.category === 'power-up';
     const isMonster = tileDef.category === 'monster';
     const isArtefact = tileDef.category === 'artefact';
@@ -2709,7 +2736,21 @@ export default function App() {
       addToHistory();
       const newTiles = [...tiles];
       if (selectedTileType === 'clue') {
-        newTiles[existingSameTypeIndex].clue = pendingClueText;
+        setTextEditModal({
+          isOpen: true,
+          tileId: newTiles[existingSameTypeIndex].id,
+          text: newTiles[existingSameTypeIndex].clue || '',
+          type: 'clue',
+          mode: 'edit'
+        });
+      } else if (selectedTileType === 'message') {
+        setTextEditModal({
+          isOpen: true,
+          tileId: newTiles[existingSameTypeIndex].id,
+          text: newTiles[existingSameTypeIndex].message || '',
+          type: 'message',
+          mode: 'edit'
+        });
       } else {
         newTiles[existingSameTypeIndex].rotation = (newTiles[existingSameTypeIndex].rotation + 90) % 360;
       }
@@ -2723,7 +2764,7 @@ export default function App() {
         if ((t.z || 0) !== currentZ) return false;
         if (t.type === 'obstacle-half-w') return false;
         const tileDefT = TILE_LIBRARY.find(td => td.type === t.type);
-        if (tileDefT?.category === 'item' || tileDefT?.category === 'power-up' || tileDefT?.category === 'monster' || tileDefT?.category === 'artefact') return false;
+        if (tileDefT?.category === 'items' || tileDefT?.category === 'power-up' || tileDefT?.category === 'monster' || tileDefT?.category === 'artefact') return false;
         
         const { x: tx, y: ty, width: tW, height: tH } = getTileBounds(t);
         const { width: mW, height: mH } = getTileBounds({ ...tileDef, rotation: currentRotation } as any);
@@ -2740,7 +2781,7 @@ export default function App() {
           if ((t.z || 0) !== currentZ) return false;
           const tileDefT = TILE_LIBRARY.find(td => td.type === t.type);
           const { x: tx, y: ty, width, height } = getTileBounds(t);
-          return tileDefT?.category !== 'item' && 
+          return tileDefT?.category !== 'items' && 
                  tileDefT?.category !== 'power-up' && 
                  tileDefT?.category !== 'monster' && 
                  tileDefT?.category !== 'artefact' && 
@@ -2785,6 +2826,16 @@ export default function App() {
       clue: clueText
     };
     setTiles([...tiles, newTile]);
+    
+    if (selectedTileType === 'message' || selectedTileType === 'clue') {
+      setTextEditModal({
+        isOpen: true,
+        tileId: newTileId,
+        text: '',
+        type: selectedTileType as 'message' | 'clue',
+        mode: 'edit'
+      });
+    }
 
     // Add trigger for rotating quad tiles
     if (tileDef.category === 'quad' && tileDef.type.includes('rotating')) {
@@ -3127,6 +3178,19 @@ export default function App() {
         setTiles(prev => prev.filter(t => t.id !== speedTile.id));
       }
 
+      // Message collision check
+      const messageTile = nextTiles.find(t => t.type === 'message');
+      if (messageTile && mode === 'play') {
+        setIsPaused(true);
+        setTextEditModal({
+          isOpen: true,
+          tileId: messageTile.id,
+          text: messageTile.message || '',
+          type: 'message',
+          mode: 'view'
+        });
+      }
+
       // Wall collision check (Current tile exit)
       const currentTilesAtPos = tiles.filter(t => {
         if ((t.z || 0) !== finalZ) return false;
@@ -3463,6 +3527,25 @@ export default function App() {
   }, [mode, movePlayer, webSlowTime, webPressCount, lastDirection]);
 
   const isEmbed = new URLSearchParams(window.location.search).get('embed') === 'true';
+
+  if (isAuthLoading || isDataLoading) {
+    return (
+      <div className="fixed inset-0 bg-black flex flex-col items-center justify-center gap-6 z-[200]">
+        <div className="relative">
+          <div className="w-24 h-24 border-4 border-indigo-500/20 rounded-full animate-spin border-t-indigo-500" />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Skull className="text-indigo-500 animate-pulse" size={32} />
+          </div>
+        </div>
+        <div className="space-y-2 text-center">
+          <h2 className="text-xl font-black text-white tracking-tighter uppercase italic">Initializing Dungeon</h2>
+          <p className="text-zinc-500 text-[10px] font-mono uppercase tracking-widest animate-pulse">
+            {isAuthLoading ? 'Authenticating...' : 'Loading Cloud Data...'}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <ErrorBoundary>
@@ -3844,6 +3927,20 @@ export default function App() {
                 </div>
               </div>
             )}
+
+            {/* Level Management Trigger */}
+            {mode === 'build' && (
+              <button
+                onClick={() => setShowLevelMgmtModal(true)}
+                className="w-10 h-10 flex items-center justify-center bg-amber-600/20 border border-amber-500/30 rounded-lg text-amber-500 hover:bg-amber-600/30 transition-all shadow-lg shadow-amber-900/10 group"
+                title="Level Management"
+              >
+                <div className="relative">
+                  <LibraryIcon size={20} />
+                  <ArrowRight size={10} className="absolute -top-1 -right-1 bg-amber-600 text-white rounded-full p-0.5 border border-zinc-900" />
+                </div>
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-4">
@@ -3974,6 +4071,29 @@ export default function App() {
         <div className="flex-1 overflow-y-auto p-4 space-y-6">
           {sidebarTab === 'library' ? (
             <>
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-[10px] font-bold uppercase text-zinc-500 tracking-widest">Categories</h2>
+                <button 
+                  onClick={() => {
+                    const allCats = ['corridor', 'items', 'quad', 'power-up', 'monster', 'artefact', 'controls'];
+                    setCollapsedSections(prev => {
+                      const next = new Set(prev);
+                      const isAllCollapsed = allCats.every(c => next.has(c));
+                      if (isAllCollapsed) {
+                        allCats.forEach(c => next.delete(c));
+                      } else {
+                        allCats.forEach(c => next.add(c));
+                      }
+                      return next;
+                    });
+                  }}
+                  className="flex items-center gap-1.5 px-2 py-1 rounded bg-white/5 hover:bg-white/10 text-[9px] font-bold text-zinc-400 hover:text-white transition-all border border-white/5"
+                >
+                  <Layers size={10} />
+                  {['corridor', 'items', 'quad', 'power-up', 'monster', 'artefact', 'controls'].every(c => collapsedSections.has(c)) ? 'Expand All' : 'Collapse All'}
+                </button>
+              </div>
+
               <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-lg p-3 space-y-2">
                 <button 
                   onClick={() => {
@@ -4000,7 +4120,7 @@ export default function App() {
                 )}
               </div>
 
-              {['corridor', 'item', 'quad', 'power-up', 'monster', 'artefact'].map((cat) => (
+              {['corridor', 'items', 'quad', 'power-up', 'monster', 'artefact'].map((cat) => (
                 <div key={cat} className="space-y-2">
                   <button 
                     onClick={() => {
@@ -4013,7 +4133,9 @@ export default function App() {
                     }}
                     className="w-full flex items-center justify-between group"
                   >
-                    <h3 className="text-[10px] font-bold uppercase text-zinc-500 tracking-tighter group-hover:text-zinc-300 transition-colors">{cat}s</h3>
+                    <h3 className="text-[10px] font-bold uppercase text-zinc-500 tracking-tighter group-hover:text-zinc-300 transition-colors">
+                      {cat === 'items' ? 'Items' : `${cat}s`}
+                    </h3>
                     {collapsedSections.has(cat) ? <ChevronDown size={10} className="text-zinc-600" /> : <ChevronUp size={10} className="text-zinc-600" />}
                   </button>
                   
@@ -4074,59 +4196,7 @@ export default function App() {
               </div>
 
               {/* Level Management */}
-              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3 space-y-3">
-                <button 
-                  onClick={() => {
-                    setCollapsedSections(prev => {
-                      const next = new Set(prev);
-                      if (next.has('level-mgmt')) next.delete('level-mgmt');
-                      else next.add('level-mgmt');
-                      return next;
-                    });
-                  }}
-                  className="w-full flex items-center justify-between group"
-                >
-                  <h3 className="text-[10px] font-bold uppercase text-emerald-400 tracking-widest">Level Management</h3>
-                  {collapsedSections.has('level-mgmt') ? <ChevronDown size={10} className="text-emerald-600" /> : <ChevronUp size={10} className="text-emerald-600" />}
-                </button>
-                
-                {!collapsedSections.has('level-mgmt') && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      onClick={() => {
-                        setSaveMode(currentLevelId ? 'overwrite' : 'new');
-                        setSaveLevelName(dungeonName);
-                        setShowSaveModal(true);
-                      }}
-                      className="flex flex-col items-center gap-1.5 p-3 bg-zinc-950/50 border border-white/5 rounded-lg hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-all group"
-                    >
-                      <Save size={16} className="text-emerald-500" />
-                      <span className="text-[9px] font-bold uppercase text-zinc-400 group-hover:text-emerald-400">Save Level</span>
-                    </button>
-                    <button
-                      onClick={clearDungeon}
-                      className="flex flex-col items-center gap-1.5 p-3 bg-zinc-950/50 border border-white/5 rounded-lg hover:border-red-500/50 hover:bg-red-500/5 transition-all group"
-                    >
-                      <Plus size={16} className="text-zinc-500 group-hover:text-red-500" />
-                      <span className="text-[9px] font-bold uppercase text-zinc-400 group-hover:text-red-400">New Canvas</span>
-                    </button>
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="flex flex-col items-center gap-1.5 p-3 bg-zinc-950/50 border border-white/5 rounded-lg hover:border-white/20 hover:bg-white/5 transition-all group"
-                    >
-                      <Upload size={16} className="text-zinc-500 group-hover:text-white" />
-                      <span className="text-[9px] font-bold uppercase text-zinc-400 group-hover:text-white">Import</span>
-                    </button>
-                    <button
-                      onClick={handleExport}
-                      className="flex flex-col items-center gap-1.5 p-3 bg-zinc-950/50 border border-white/5 rounded-lg hover:border-white/20 hover:bg-white/5 transition-all group col-span-2"
-                    >
-                      <Download size={16} className="text-zinc-500 group-hover:text-white" />
-                      <span className="text-[9px] font-bold uppercase text-zinc-400 group-hover:text-white">Download JSON</span>
-                    </button>
-                  </div>
-                )}
-              </div>
+              {/* Moved to Top Bar Modal */}
 
               {/* Narrative */}
               <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 space-y-3">
@@ -4281,15 +4351,10 @@ export default function App() {
                     </div>
 
                     {selectedTileType === 'clue' && (
-                      <div className="space-y-1 p-2 bg-pink-500/5 border border-pink-500/10 rounded animate-in fade-in slide-in-from-top-1">
-                        <label className="text-[8px] text-pink-500 font-mono uppercase tracking-widest">Clue Text</label>
-                        <input
-                          type="text"
-                          value={pendingClueText}
-                          onChange={(e) => setPendingClueText(e.target.value)}
-                          className="w-full bg-zinc-950/50 border border-pink-500/20 rounded px-2 py-1 text-[10px] text-pink-100 focus:outline-none focus:border-pink-500/50"
-                          placeholder="Enter clue..."
-                        />
+                      <div className="p-3 bg-pink-500/5 border border-pink-500/10 rounded-xl space-y-2">
+                        <p className="text-[9px] text-pink-400 leading-relaxed font-medium">
+                          Clue text is now managed via a modal. Click the tile on the canvas to edit its content.
+                        </p>
                       </div>
                     )}
                   </div>
@@ -4720,8 +4785,8 @@ export default function App() {
                     const catB = TILE_LIBRARY.find(t => t.type === b.type)?.category;
                     if (catA === 'corridor' && catB !== 'corridor') return -1;
                     if (catA !== 'corridor' && catB === 'corridor') return 1;
-                    if (catA === 'item' && catB === 'monster') return -1;
-                    if (catA === 'monster' && catB === 'item') return 1;
+                    if (catA === 'items' && catB === 'monster') return -1;
+                    if (catA === 'monster' && catB === 'items') return 1;
                     return 0;
                   })
                   .map((tile) => (
@@ -5121,6 +5186,7 @@ export default function App() {
         <AdminDashboard 
           onClose={() => setMode('build')}
           levels={levels}
+          userLevels={userLevels}
           sitemaps={sitemaps}
           campaigns={campaigns}
           isSaving={isSaving}
@@ -5230,6 +5296,164 @@ export default function App() {
                     {isSaving ? 'SAVING...' : 'SAVE'}
                   </button>
                 </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Text Edit Modal (Messages & Clues) */}
+      <AnimatePresence>
+        {textEditModal.isOpen && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-6">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className={cn(
+                "bg-zinc-900 border rounded-3xl p-8 max-w-md w-full shadow-2xl",
+                textEditModal.type === 'clue' ? "border-pink-500/30" : "border-amber-500/30"
+              )}
+            >
+              <div className={cn(
+                "w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6",
+                textEditModal.type === 'clue' ? "bg-pink-500/20" : "bg-amber-500/20"
+              )}>
+                {textEditModal.type === 'clue' ? <Info className="text-pink-500" size={32} /> : <BookOpen className="text-amber-500" size={32} />}
+              </div>
+              
+              <h2 className={cn(
+                "text-2xl font-black text-center mb-6 tracking-tight uppercase italic",
+                textEditModal.type === 'clue' ? "text-pink-100" : "text-amber-100"
+              )}>
+                {textEditModal.mode === 'edit' 
+                  ? `Edit ${textEditModal.type === 'clue' ? 'Clue' : 'Message'}` 
+                  : `Ancient ${textEditModal.type === 'clue' ? 'Clue' : 'Message'}`}
+              </h2>
+
+              {textEditModal.mode === 'edit' ? (
+                <textarea
+                  value={textEditModal.text}
+                  onChange={(e) => setTextEditModal(prev => ({ ...prev, text: e.target.value }))}
+                  placeholder={`Enter ${textEditModal.type === 'clue' ? 'clue' : 'message'} here...`}
+                  className={cn(
+                    "w-full h-32 bg-zinc-950 border rounded-xl p-4 text-white text-sm focus:outline-none transition-all resize-none mb-6",
+                    textEditModal.type === 'clue' ? "border-pink-500/20 focus:border-pink-500/50" : "border-amber-500/20 focus:border-amber-500/50"
+                  )}
+                  autoFocus
+                />
+              ) : (
+                <div className="bg-zinc-950/50 border border-white/5 rounded-2xl p-6 mb-8">
+                  <p className="text-zinc-300 text-center leading-relaxed italic font-serif">
+                    "{textEditModal.text || (textEditModal.type === 'clue' ? 'The clue is unreadable...' : 'The scroll is blank...')}"
+                  </p>
+                </div>
+              )}
+
+              <button
+                onClick={() => {
+                  if (textEditModal.mode === 'edit' && textEditModal.tileId) {
+                    setTiles(prev => prev.map(t => {
+                      if (t.id === textEditModal.tileId) {
+                        return textEditModal.type === 'clue' 
+                          ? { ...t, clue: textEditModal.text } 
+                          : { ...t, message: textEditModal.text };
+                      }
+                      return t;
+                    }));
+                  }
+                  setTextEditModal(prev => ({ ...prev, isOpen: false }));
+                  setIsPaused(false);
+                }}
+                className={cn(
+                  "w-full py-4 text-white font-bold rounded-xl transition-all active:scale-95 shadow-lg",
+                  textEditModal.type === 'clue' 
+                    ? "bg-pink-600 hover:bg-pink-500 shadow-pink-900/20" 
+                    : "bg-amber-600 hover:bg-amber-500 shadow-amber-900/20"
+                )}
+              >
+                {textEditModal.mode === 'edit' ? 'Save Changes' : 'Close'}
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Level Management Modal */}
+      <AnimatePresence>
+        {showLevelMgmtModal && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-6">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-zinc-900 border border-amber-500/30 rounded-3xl p-8 max-w-md w-full shadow-2xl"
+            >
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-amber-500/20 rounded-xl flex items-center justify-center">
+                    <Settings className="text-amber-500" size={20} />
+                  </div>
+                  <h2 className="text-xl font-black text-white uppercase tracking-tight italic">Level Management</h2>
+                </div>
+                <button 
+                  onClick={() => setShowLevelMgmtModal(false)}
+                  className="p-2 hover:bg-white/5 rounded-full text-zinc-500 hover:text-white transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 mb-8">
+                <button
+                  onClick={() => {
+                    setSaveMode(currentLevelId ? 'overwrite' : 'new');
+                    setSaveLevelName(dungeonName);
+                    setShowSaveModal(true);
+                    setShowLevelMgmtModal(false);
+                  }}
+                  className="flex flex-col items-center gap-3 p-6 bg-zinc-950/50 border border-white/5 rounded-2xl hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-all group"
+                >
+                  <Save size={24} className="text-emerald-500" />
+                  <span className="text-[10px] font-bold uppercase text-zinc-400 group-hover:text-emerald-400 tracking-widest">Save Level</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setShowClearConfirmModal(true);
+                    setShowLevelMgmtModal(false);
+                  }}
+                  className="flex flex-col items-center gap-3 p-6 bg-zinc-950/50 border border-white/5 rounded-2xl hover:border-red-500/50 hover:bg-red-500/5 transition-all group"
+                >
+                  <Plus size={24} className="text-zinc-500 group-hover:text-red-500" />
+                  <span className="text-[10px] font-bold uppercase text-zinc-400 group-hover:text-red-400 tracking-widest">New Canvas</span>
+                </button>
+                <button
+                  onClick={() => {
+                    fileInputRef.current?.click();
+                    setShowLevelMgmtModal(false);
+                  }}
+                  className="flex flex-col items-center gap-3 p-6 bg-zinc-950/50 border border-white/5 rounded-2xl hover:border-indigo-500/50 hover:bg-indigo-500/5 transition-all group"
+                >
+                  <Upload size={24} className="text-indigo-500" />
+                  <span className="text-[10px] font-bold uppercase text-zinc-400 group-hover:text-indigo-400 tracking-widest">Import JSON</span>
+                </button>
+                <button
+                  onClick={() => {
+                    handleExport();
+                    setShowLevelMgmtModal(false);
+                  }}
+                  className="flex flex-col items-center gap-3 p-6 bg-zinc-950/50 border border-white/5 rounded-2xl hover:border-amber-500/50 hover:bg-amber-500/5 transition-all group"
+                >
+                  <Download size={24} className="text-amber-500" />
+                  <span className="text-[10px] font-bold uppercase text-zinc-400 group-hover:text-amber-400 tracking-widest">Download JSON</span>
+                </button>
+              </div>
+
+              <div className="p-4 bg-zinc-950/50 border border-white/5 rounded-2xl">
+                <p className="text-[9px] text-zinc-500 leading-relaxed text-center uppercase tracking-widest">
+                  Manage your dungeon blueprints here. <br/>
+                  Blueprints are stored in the ancient cloud.
+                </p>
               </div>
             </motion.div>
           </div>

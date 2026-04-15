@@ -66,6 +66,7 @@ service cloud.firestore {
              data.id is string && data.id.size() > 0 && data.id.size() < 100 &&
              data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
              data.data is map &&
+             (!('tiles' in data.data) || (data.data.tiles is list && data.data.tiles.size() < 1000)) &&
              (!('authorId' in data) || (data.authorId is string && data.authorId.size() < 100)) &&
              (!('authorEmail' in data) || (data.authorEmail is string && data.authorEmail.size() < 200));
     }

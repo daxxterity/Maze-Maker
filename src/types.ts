@@ -52,6 +52,7 @@ export type TileType =
   | 'spike-pit'
   | 'speed'
   | 'key'
+  | 'message'
   | 'open-floor-x5';
 
 export interface TriggerData {
@@ -74,6 +75,7 @@ export interface TileData {
   height?: number;
   isNeutralized?: boolean;
   clue?: string;
+  message?: string;
 }
 
 export interface DungeonMap {

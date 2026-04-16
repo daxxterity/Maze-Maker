@@ -1,3 +1,11 @@
+import { 
+  Shield, 
+  Compass, 
+  Ghost, 
+  Footprints, 
+  ArrowUp, 
+  Wind 
+} from "lucide-react";
 import { TileType } from "./types";
 
 export interface TileDefinition {
@@ -78,3 +86,16 @@ export const TILE_LIBRARY: TileDefinition[] = [
   { type: 'rotating-wall-i', label: 'Rot. I', category: 'quad', size: 2, color: '#4338ca', description: 'I-shaped rotating wall' },
   { type: 'rotating-wall-plus', label: 'Rot. +', category: 'quad', size: 2, color: '#4338ca', description: '+-shaped rotating wall' },
 ];
+
+export const ARTEFACTS = [
+  { id: 'artefact-shield', label: 'Shield', icon: <Shield size={24} />, desc: 'Immune to monster attacks' },
+  { id: 'artefact-rod', label: 'Rod', icon: <Compass size={24} />, desc: 'Points to the exit' },
+  { id: 'artefact-cloak', label: 'Cloak', icon: <Ghost size={24} />, desc: 'Invisible to monsters' },
+  { id: 'artefact-boots', label: 'Boots', icon: <Footprints size={24} />, desc: 'Walk on water/lava' },
+  { id: 'artefact-jumper', label: 'Jumper', icon: <ArrowUp size={24} />, desc: 'Jump Pole: Jump x2' },
+  { id: 'artefact-runner', label: 'Runner', icon: <Wind size={24} />, desc: 'Wings: Speed x2' },
+];
+
+export const DEFAULT_GRID_SIZE = 64;
+export const DEFAULT_GRID_CELLS_X = 20;
+export const DEFAULT_GRID_CELLS_Y = 20;

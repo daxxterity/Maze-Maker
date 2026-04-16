@@ -95,6 +95,18 @@ export interface DungeonMap {
 
 export type GameMode = 'build' | 'play' | 'admin';
 
+export interface MonsterData {
+  id: string;
+  type: TileType;
+  x: number;
+  y: number;
+  z: number;
+  immobilizedUntil?: number;
+  distractedUntil?: number;
+  nextDistractionAt?: number;
+  distractionDir?: { dx: number, dy: number };
+}
+
 export interface CampaignData {
   id: string;
   name: string;

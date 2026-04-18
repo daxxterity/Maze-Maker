@@ -2033,7 +2033,7 @@ export default function App() {
             {/* LOGO */}
             <div className="flex flex-col">
               <h1 className="text-sm font-bold tracking-tighter">DUNGEON ARCHITECT</h1>
-              <p className="text-[9px] text-zinc-500 font-mono uppercase tracking-widest">v1.0.4-alpha</p>
+              <p className="text-[9px] text-zinc-500 font-mono uppercase tracking-widest">v1.1.0-alpha</p>
             </div>
 
             <div className="h-8 w-px bg-white/10" />
@@ -2146,13 +2146,14 @@ export default function App() {
             {mode === 'build' && user && (
               <button
                 onClick={() => setShowLevelMgmtModal(true)}
-                className="w-10 h-10 flex items-center justify-center bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-500 hover:bg-amber-500/20 transition-all shadow-lg group"
+                className="h-10 px-4 flex items-center gap-3 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-500 hover:bg-amber-500/20 transition-all shadow-lg group"
                 title="Level Management"
               >
                 <div className="relative">
-                  <FolderOpen size={20} className="fill-amber-500/20" />
-                  <ArrowRight size={10} className="absolute -top-1 -right-1 bg-amber-600 text-white rounded-full p-0.5 border border-zinc-900" />
+                  <FolderOpen size={18} className="fill-amber-500/20" />
+                  <ArrowRight size={8} className="absolute -top-1 -right-1 bg-amber-600 text-white rounded-full p-0.5 border border-zinc-900" />
                 </div>
+                <span className="text-[10px] font-black uppercase tracking-widest">Level Management</span>
               </button>
             )}
           </div>

@@ -60,8 +60,8 @@ export async function testFirestoreConnection() {
   if (!isFirebaseConfigured) return;
   try {
     const db = getDb();
-    // Try to get a non-existent doc to test connectivity
-    await getDocFromServer(doc(db, '_connection_test_', 'ping'));
+    // Try to get a non-existent doc in a public collection to test connectivity
+    await getDocFromServer(doc(db, 'levels', '_ping_'));
     console.log('Firestore Connection: SUCCESS');
   } catch (error: any) {
     if (error.message?.includes('offline')) {

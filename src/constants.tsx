@@ -43,11 +43,11 @@ export const TILE_LIBRARY: TileDefinition[] = [
   { type: 'door', label: 'Door', category: 'items', size: 1, color: '#d97706', description: 'Passable barrier' },
   { type: 'rotating-wall', label: 'Rot. Wall', category: 'items', size: 1, color: '#6366f1', description: 'Moves on trigger' },
   { type: 'obstacle-half-w', label: 'Swerve', category: 'items', size: 1, color: '#f59e0b', description: 'Half-width obstacle' },
-  { type: 'obstacle-half-h', label: 'Jump', category: 'items', size: 1, color: '#f59e0b', description: 'Half-height obstacle' },
   { type: 'obstacle-above', label: 'Slide', category: 'items', size: 1, color: '#f59e0b', description: 'Obstacle above' },
   { type: 'portal', label: 'Portal', category: 'items', size: 1, color: '#a855f7', description: 'Teleport between portals' },
   { type: 'exit', label: 'Exit', category: 'items', size: 1, color: '#7dd3fc', description: 'Reach to win' },
   { type: 'message', label: 'Message', category: 'items', size: 1, color: '#fcd34d', description: 'Displays a message' },
+  { type: 'void', label: 'Void', category: 'items', size: 1, color: '#000000', description: 'Deadly bottomless pit' },
   { type: 'web', label: 'Web', category: 'items', size: 1, color: '#ffffff', description: 'Sticky spider web' },
   { type: 'stairs-up', label: 'Stairs Up', category: 'items', size: 1, color: '#92400e', description: 'Go to floor above' },
   { type: 'stairs-down', label: 'Stairs Down', category: 'items', size: 1, color: '#78350f', description: 'Go to floor below' },
@@ -59,8 +59,8 @@ export const TILE_LIBRARY: TileDefinition[] = [
   { type: 'artefact-rod', label: 'Rod', category: 'artefact', size: 1, color: '#10b981', description: 'Points to exit' },
   { type: 'artefact-cloak', label: 'Cloak', category: 'artefact', size: 1, color: '#6366f1', description: 'Invisible to monsters' },
   { type: 'artefact-boots', label: 'Boots', category: 'artefact', size: 1, color: '#f97316', description: 'Walk on water/lava' },
-  { type: 'artefact-jumper', label: 'Jumper', category: 'artefact', size: 1, color: '#8b5cf6', description: 'Jump Pole: Jump x2' },
   { type: 'artefact-runner', label: 'Runner', category: 'artefact', size: 1, color: '#06b6d4', description: 'Wings: Speed x2' },
+  { type: 'artefact-jumper', label: 'Jumper', category: 'artefact', size: 1, color: '#fbbf24', description: 'Jump: Dist x2' },
   { type: 'key', label: 'Key', category: 'artefact', size: 1, color: '#fbbf24', description: 'Collect to open doors' },
 
   // Power Ups
@@ -70,7 +70,6 @@ export const TILE_LIBRARY: TileDefinition[] = [
   { type: 'health-potion', label: 'Potion', category: 'power-up', size: 1, color: '#22c55e', description: '+25% Health' },
   { type: 'firefly', label: 'Firefly', category: 'power-up', size: 1, color: '#fef08a', description: 'Follow light' },
   { type: 'magic-tile', label: 'Magic', category: 'power-up', size: 1, color: '#6366f1', description: 'Speed x2' },
-  { type: 'trampoline', label: 'Trampolin', category: 'power-up', size: 1, color: '#f97316', description: 'Jump x2' },
   { type: 'lever', label: 'Lever', category: 'power-up', size: 1, color: '#94a3b8', description: 'Slow monsters' },
   { type: 'speed', label: 'Speed', category: 'power-up', size: 1, color: '#06b6d4', description: 'Speed x2' },
 
@@ -92,10 +91,10 @@ export const ARTEFACTS = [
   { id: 'artefact-rod', label: 'Rod', icon: <Compass size={24} />, desc: 'Points to the exit' },
   { id: 'artefact-cloak', label: 'Cloak', icon: <Ghost size={24} />, desc: 'Invisible to monsters' },
   { id: 'artefact-boots', label: 'Boots', icon: <Footprints size={24} />, desc: 'Walk on water/lava' },
-  { id: 'artefact-jumper', label: 'Jumper', icon: <ArrowUp size={24} />, desc: 'Jump Pole: Jump x2' },
   { id: 'artefact-runner', label: 'Runner', icon: <Wind size={24} />, desc: 'Wings: Speed x2' },
+  { id: 'artefact-jumper', label: 'Jumper', icon: <ArrowUp size={24} />, desc: 'Jumping Pole: Jump x2' },
 ];
 
 export const DEFAULT_GRID_SIZE = 64;
-export const DEFAULT_GRID_CELLS_X = 20;
-export const DEFAULT_GRID_CELLS_Y = 20;
+export const DEFAULT_GRID_CELLS_X = 500;
+export const DEFAULT_GRID_CELLS_Y = 500;

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { Settings, X, Plus, CheckCircle2, Download, Upload, Trash2, Play, FileJson, Info } from 'lucide-react';
 import { cn } from '../../lib/utils';
@@ -46,6 +46,11 @@ export const AdminDashboard = ({
   const [viewingSitemapId, setViewingSitemapId] = useState<string | null>(null);
 
   const viewingSitemap = sitemaps.find(s => s.id === viewingSitemapId);
+
+  const combinedLevels = useMemo(() => {
+    const list = [...userLevels, ...levels.filter(l => !userLevels.find(ul => ul.id === l.id))];
+    return list.sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
+  }, [levels, userLevels]);
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-8">
@@ -156,7 +161,7 @@ export const AdminDashboard = ({
                   <div className="space-y-2">
                     <label className="text-[10px] font-bold text-zinc-500 uppercase">Select Levels for Campaign</label>
                     <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
-                      {[...userLevels, ...levels.filter(l => !userLevels.find(ul => ul.id === l.id))].map(level => {
+                      {combinedLevels.map(level => {
                         const isSelected = editingCampaign.levelIds?.includes(level.id);
                         return (
                           <button 
@@ -269,7 +274,7 @@ export const AdminDashboard = ({
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {[...userLevels, ...levels.filter(l => !userLevels.find(ul => ul.id === l.id))].map(level => (
+                {combinedLevels.map(level => (
                   <div key={level.id} className="bg-zinc-950/50 border border-white/5 rounded-xl p-5 flex items-center justify-between group hover:border-amber-500/30 transition-all">
                     <div>
                       <h4 className="font-bold text-white group-hover:text-amber-500 transition-colors">{level.name}</h4>

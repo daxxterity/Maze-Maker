@@ -21,14 +21,14 @@ export function sanitizeFirestoreData(data: any): any {
   return data;
 }
 
-export const getTileBounds = (tile: { x: number, y: number, size: number, width?: number, height?: number, rotation: number }) => {
-  const w = tile.width || tile.size;
-  const h = tile.height || tile.size;
-  const r = tile.rotation;
+export const getTileBounds = (tile: { x: number, y: number, size?: number, width?: number, height?: number, rotation: number }) => {
+  const w = tile.width || tile.size || 1;
+  const h = tile.height || tile.size || 1;
+  const r = tile.rotation || 0;
   const tw = (r === 90 || r === 270) ? h : w;
   const th = (r === 90 || r === 270) ? w : h;
-  let tx = tile.x;
-  let ty = tile.y;
+  let tx = tile.x || 0;
+  let ty = tile.y || 0;
   if (r === 90) tx -= (h - 1);
   else if (r === 180) { tx -= (w - 1); ty -= (h - 1); }
   else if (r === 270) ty -= (w - 1);
@@ -140,23 +140,23 @@ export const isWallBlocked = (tile: TileData, dir: string, px: number, py: numbe
 };
 
 export const isSwerveBlocked = (tile: TileData, moveDir: string, isJumping: boolean, pressedKeys: Set<string>, isOrc = false) => {
-  if (tile.type !== 'obstacle-half-w' || (isJumping && !isOrc)) return false;
-  const r = tile.rotation;
-  if (moveDir === 'down') {
-    if (r === 180 && !pressedKeys.has('a') && !isOrc) return true;
-    if (r === 270 && !pressedKeys.has('d') && !isOrc) return true;
-  }
-  if (moveDir === 'up') {
-    if (r === 0 && !pressedKeys.has('d') && !isOrc) return true;
-    if (r === 90 && !pressedKeys.has('a') && !isOrc) return true;
-  }
-  if (moveDir === 'right') {
-    if (r === 90 && !pressedKeys.has('s') && !isOrc) return true;
-    if (r === 180 && !pressedKeys.has('w') && !isOrc) return true;
-  }
-  if (moveDir === 'left') {
-    if (r === 0 && !pressedKeys.has('s') && !isOrc) return true;
-    if (r === 270 && !pressedKeys.has('w') && !isOrc) return true;
-  }
   return false;
+};
+
+export const getLevelBounds = (tiles: TileData[]) => {
+  if (tiles.length === 0) return { minX: 0, minY: 0, maxX: 20, maxY: 20 };
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+
+  tiles.forEach(t => {
+    const { x, y, width, height } = getTileBounds(t);
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x + width);
+    maxY = Math.max(maxY, y + height);
+  });
+
+  return { minX, minY, maxX, maxY };
 };

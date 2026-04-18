@@ -120,7 +120,7 @@ export const PlayerHUD = (props: PlayerHUDProps) => {
         </AnimatePresence>
 
         <div className="flex items-center gap-3 bg-black/60 backdrop-blur-md p-2 rounded-2xl border border-white/10 shadow-2xl">
-          {['artefact-shield', 'artefact-rod', 'artefact-cloak', 'artefact-boots', 'artefact-jumper', 'artefact-runner'].map((art) => {
+          {['artefact-shield', 'artefact-rod', 'artefact-cloak', 'artefact-boots', 'artefact-runner'].map((art) => {
             const isOwned = artefacts.includes(art);
             const isActive = activeArtefact === art;
             const isCooldown = activeArtefact === art && artefactCooldown > 0;
@@ -138,7 +138,6 @@ export const PlayerHUD = (props: PlayerHUDProps) => {
                 {art === 'artefact-rod' && <Zap size={20} className={cn(isOwned ? "text-emerald-400" : "text-zinc-600")} />}
                 {art === 'artefact-cloak' && <Ghost size={20} className={cn(isOwned ? "text-indigo-400" : "text-zinc-600")} />}
                 {art === 'artefact-boots' && <Footprints size={20} className={cn(isOwned ? "text-orange-400" : "text-zinc-600")} />}
-                {art === 'artefact-jumper' && <ArrowUp size={20} className={cn(isOwned ? "text-purple-400" : "text-zinc-600")} />}
                 {art === 'artefact-runner' && <Wind size={20} className={cn(isOwned ? "text-cyan-400" : "text-zinc-600")} />}
                 
                 {isActive && (

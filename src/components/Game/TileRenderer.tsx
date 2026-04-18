@@ -214,6 +214,32 @@ export const TileRenderer = ({
             />
           </Group>
         );
+      case 'void':
+        return (
+          <Group x={drawOffset} y={drawOffset}>
+            <Rect width={drawSize} height={drawSize} fill="#000000" />
+            <Circle 
+              x={drawCenter} 
+              y={drawCenter} 
+              radius={drawSize/2.5} 
+              fillRadialGradientStartPoint={{ x: 0, y: 0 }}
+              fillRadialGradientStartRadius={0}
+              fillRadialGradientEndPoint={{ x: 0, y: 0 }}
+              fillRadialGradientEndRadius={drawSize/2}
+              fillRadialGradientColorStops={[0, '#000000', 0.8, '#1e293b', 1, '#334155']}
+              opacity={0.8}
+            />
+            <Text 
+              text="VOID" 
+              fontSize={6} 
+              fill="#ef4444" 
+              x={2} 
+              y={2} 
+              fontStyle="bold"
+              opacity={0.5}
+            />
+          </Group>
+        );
       case 'column':
         return (
           <Group x={drawOffset} y={drawOffset}>
@@ -248,13 +274,6 @@ export const TileRenderer = ({
         return (
           <Group x={drawOffset} y={drawOffset}>
             <Rect x={0} y={0} width={drawSize/2} height={drawSize/2} fill="#f59e0b" />
-          </Group>
-        );
-      case 'obstacle-half-h':
-        return (
-          <Group x={drawOffset} y={drawOffset}>
-            <Rect width={drawSize} height={drawSize} fill="#6b7280" opacity={isItem || isPowerUp ? 0.8 : 1} />
-            <Rect x={0} y={0} width={drawSize} height={drawSize/2} fill="#f59e0b" />
           </Group>
         );
       case 'obstacle-above':
@@ -344,14 +363,6 @@ export const TileRenderer = ({
             <Rect x={drawCenter + 2} y={drawCenter + 2} width={10} height={4} fill="#f97316" cornerRadius={1} />
           </Group>
         );
-      case 'artefact-jumper':
-        return (
-          <Group x={drawOffset} y={drawOffset}>
-            <Line points={[drawCenter, drawCenter + 10, drawCenter, drawCenter - 10]} stroke="#8b5cf6" strokeWidth={3} />
-            <Rect x={drawCenter - 4} y={drawCenter + 6} width={8} height={2} fill="#8b5cf6" />
-            <Circle x={drawCenter} y={drawCenter - 10} radius={3} fill="#a78bfa" />
-          </Group>
-        );
       case 'artefact-runner':
         return (
           <Group x={drawOffset} y={drawOffset}>
@@ -359,6 +370,13 @@ export const TileRenderer = ({
             <Ellipse x={drawCenter - 6} y={drawCenter} radiusX={8} radiusY={4} fill="#06b6d4" rotation={-30} opacity={0.6} />
             <Ellipse x={drawCenter + 6} y={drawCenter} radiusX={8} radiusY={4} fill="#06b6d4" rotation={30} opacity={0.6} />
             <Circle x={drawCenter} y={drawCenter} radius={4} fill="#22d3ee" />
+          </Group>
+        );
+      case 'artefact-jumper':
+        return (
+          <Group x={drawOffset} y={drawOffset}>
+            <Line points={[drawCenter, drawCenter - 10, drawCenter, drawCenter + 10]} stroke="#fbbf24" strokeWidth={4} />
+            <Line points={[drawCenter - 6, drawCenter - 4, drawCenter, drawCenter - 10, drawCenter + 6, drawCenter - 4]} stroke="#fbbf24" strokeWidth={2} />
           </Group>
         );
       case 'key':
@@ -430,9 +448,19 @@ export const TileRenderer = ({
           </Group>
         );
       case 'firefly':
+        const glowPulse = 10 + Math.sin(tick * 0.2) * 5;
+        const opacityPulse = 0.7 + Math.sin(tick * 0.2) * 0.3;
         return (
           <Group x={drawOffset} y={drawOffset}>
-            <Circle x={drawCenter} y={drawCenter} radius={drawSize/4} fill="#fef08a" shadowBlur={10} shadowColor="#fef08a" />
+            <Circle 
+              x={drawCenter} 
+              y={drawCenter} 
+              radius={drawSize/4} 
+              fill="#fef08a" 
+              shadowBlur={glowPulse} 
+              shadowColor="#fef08a" 
+              opacity={opacityPulse}
+            />
             <Circle x={drawCenter} y={drawCenter} radius={drawSize/6} fill="#facc15" />
           </Group>
         );
@@ -442,16 +470,6 @@ export const TileRenderer = ({
             <Rect width={drawSize} height={drawSize} fill="#6366f1" opacity={0.3} cornerRadius={4} />
             <Line points={[4, drawCenter, drawSize-4, drawCenter]} stroke="#6366f1" strokeWidth={2} />
             <Line points={[drawCenter, 4, drawCenter, drawSize-4]} stroke="#6366f1" strokeWidth={2} />
-          </Group>
-        );
-      case 'trampoline':
-        return (
-          <Group x={drawOffset} y={drawOffset}>
-            <Rect x={2} y={drawSize-6} width={drawSize-4} height={4} fill="#1f2937" cornerRadius={1} />
-            <Line points={[4, drawSize-6, 4, drawSize-2]} stroke="#1f2937" strokeWidth={2} />
-            <Line points={[drawSize-4, drawSize-6, drawSize-4, drawSize-2]} stroke="#1f2937" strokeWidth={2} />
-            <Rect x={4} y={drawSize-10} width={drawSize-8} height={4} fill="#f97316" cornerRadius={2} />
-            <Line points={[drawCenter, drawSize-10, drawCenter, drawCenter]} stroke="#f97316" strokeWidth={1} dash={[1, 1]} />
           </Group>
         );
       case 'lever':

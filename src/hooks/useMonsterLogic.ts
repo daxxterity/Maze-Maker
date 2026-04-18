@@ -31,6 +31,7 @@ interface MonsterLogicProps {
   setIsFlashing: React.Dispatch<React.SetStateAction<boolean>>;
   setDeathCount: React.Dispatch<React.SetStateAction<number>>;
   isPowerUpActive: boolean;
+  spawnProtectionTime: number;
 }
 
 export const useMonsterLogic = ({
@@ -61,7 +62,8 @@ export const useMonsterLogic = ({
   setIsDying,
   setIsFlashing,
   setDeathCount,
-  isPowerUpActive
+  isPowerUpActive,
+  spawnProtectionTime
 }: MonsterLogicProps) => {
   useEffect(() => {
     let interval: any;
@@ -267,23 +269,12 @@ export const useMonsterLogic = ({
             }
 
             // Check collision with player
-            if (nextX === playerPos.x && nextY === playerPos.y) {
-              const isTeeth = m.type === 'teeth';
+            if (nextX === playerPos.x && nextY === playerPos.y && spawnProtectionTime <= 0 && playerAction !== 'jump') {
               const isShielded = hasShield || (selectedArtefact === 'artefact-shield' && isArtefactActive);
-              const canJumpOver = isTeeth && playerAction === 'jump';
 
-              if (!isShielded && !canJumpOver) {
+              if (!isShielded && mode === 'play') {
                 setIsDying(true);
                 setIsFlashing(true);
-                setDeathCount(d => d + 1);
-                setTimeout(() => {
-                  setIsDying(false);
-                  setIsFlashing(false);
-                  const entrance = tiles.find(t => t.type === 'entrance');
-                  if (entrance) setPlayerPos({ x: entrance.x, y: entrance.y, z: entrance.z || 0 });
-                  setMonsters([]);
-                  setPlayTime(0);
-                }, 1000);
               }
             }
 
@@ -300,5 +291,5 @@ export const useMonsterLogic = ({
       }, moveInterval);
     }
     return () => clearInterval(interval);
-  }, [mode, isGameOver, isWin, isDying, playTime, monsters.length, tiles, playerPos, hasShield, selectedArtefact, isArtefactActive, playerAction, hasCloak, isPaused, slowMonstersTime]);
+  }, [mode, isGameOver, isWin, isDying, playTime, monsters.length, tiles, playerPos, hasShield, selectedArtefact, isArtefactActive, playerAction, hasCloak, isPaused, slowMonstersTime, spawnProtectionTime]);
 };

@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from 'react';
 import { TileData, MonsterData, GameMode } from '../types';
-import { getTileBounds } from '../lib/gameUtils';
+import { getTileBounds, isSwerveBlocked } from '../lib/gameUtils';
 
 interface PlayerMovementProps {
   mode: GameMode;
@@ -18,12 +18,12 @@ interface PlayerMovementProps {
   gridSize: number;
   canvasWidth: number;
   canvasHeight: number;
+  speedBoostTime: number;
   jumpBoostTime: number;
+  hasRunner: boolean;
   hasJumper: boolean;
   selectedArtefact: string | null;
   isArtefactActive: boolean;
-  speedBoostTime: number;
-  hasRunner: boolean;
   webSlowTime: number;
   setWebSlowTime: React.Dispatch<React.SetStateAction<number>>;
   setWebPressCount: React.Dispatch<React.SetStateAction<number>>;
@@ -39,6 +39,15 @@ interface PlayerMovementProps {
   setPlayerAction: React.Dispatch<React.SetStateAction<'normal' | 'jump' | 'slide'>>;
   playerAction: 'normal' | 'jump' | 'slide';
   isWallBlocked: (tile: TileData, dir: string, px: number, py: number, isEntry?: boolean) => boolean;
+  pressedKeys: Set<string>;
+  setPressedKeys: React.Dispatch<React.SetStateAction<Set<string>>>;
+  setTextEditModal: React.Dispatch<React.SetStateAction<any>>;
+  setBumpEffect: React.Dispatch<React.SetStateAction<{ x: number, y: number, tick: number } | null>>;
+  tick: number;
+  setIsFalling: React.Dispatch<React.SetStateAction<boolean>>;
+  isFalling: boolean;
+  hasBoots: boolean;
+  spawnProtectionTime: number;
 }
 
 export const usePlayerMovement = ({
@@ -57,12 +66,12 @@ export const usePlayerMovement = ({
   gridSize,
   canvasWidth,
   canvasHeight,
-  jumpBoostTime,
-  hasJumper,
   selectedArtefact,
   isArtefactActive,
   speedBoostTime,
+  jumpBoostTime,
   hasRunner,
+  hasJumper,
   webSlowTime,
   setWebSlowTime,
   setWebPressCount,
@@ -77,11 +86,21 @@ export const usePlayerMovement = ({
   lastDirection,
   setPlayerAction,
   playerAction,
-  isWallBlocked
+  isWallBlocked,
+  pressedKeys,
+  setPressedKeys,
+  setTextEditModal,
+  setBumpEffect,
+  tick,
+  setIsFalling,
+  isFalling,
+  hasBoots,
+  spawnProtectionTime
 }: PlayerMovementProps) => {
-  const movePlayer = useCallback((dx: number, dy: number, actionType: 'normal' | 'jump' | 'slide' = 'normal') => {
-    if (mode !== 'play' || isGameOver || isWin || isDying || isInitialArtefactSelection || isPaused) return;
+  const movePlayer = useCallback((dx: number, dy: number, actionType: 'normal' | 'jump' | 'slide' = 'normal', currentKeys?: Set<string>) => {
+    if (mode !== 'play' || isGameOver || isWin || isDying || isInitialArtefactSelection || isPaused || isFalling) return;
 
+    const activeKeys = currentKeys || pressedKeys;
     const direction = dx > 0 ? 'right' : dx < 0 ? 'left' : dy > 0 ? 'down' : 'up';
     const oppositeDir = dx > 0 ? 'left' : dx < 0 ? 'right' : dy > 0 ? 'up' : 'down';
 
@@ -89,37 +108,23 @@ export const usePlayerMovement = ({
       setLastDirection({ dx, dy });
     }
 
-    const isSpecial = actionType !== 'normal';
-    const jumpMultiplier = (jumpBoostTime > 0 || hasJumper || (selectedArtefact === 'artefact-jumper' && isArtefactActive)) ? 2 : 1;
+    let effectiveAction: 'normal' | 'jump' | 'slide' = actionType;
+    if (actionType === 'normal') {
+      if (activeKeys.has('lmb') || activeKeys.has('k')) {
+        effectiveAction = 'slide';
+      }
+    }
+
     const speedMultiplier = (speedBoostTime > 0 || hasRunner || (selectedArtefact === 'artefact-runner' && isArtefactActive)) ? 2 : 1;
     const webMultiplier = webSlowTime > 0 ? 0.5 : 1;
     
-    let step = Math.max(1, Math.floor((actionType === 'jump' ? 2 * jumpMultiplier : 1) * speedMultiplier * webMultiplier));
+    const isJumping = actionType === 'jump';
+    let step = Math.max(1, Math.floor(speedMultiplier * webMultiplier));
+    if (isJumping) {
+      step = (hasJumper || (selectedArtefact === 'artefact-jumper' && isArtefactActive) || jumpBoostTime > 0) ? 5 : 3;
+    }
     
     const currentZ = playerPos.z || 0;
-
-    // Special jump for Lava/Water: jump over 2 tiles (land on 3rd)
-    const checkX = playerPos.x + dx;
-    const checkY = playerPos.y + dy;
-    const checkTiles = tiles.filter(t => {
-      if ((t.z || 0) !== currentZ) return false;
-      const { x: tx, y: ty, width, height } = getTileBounds(t);
-      return checkX >= tx && checkX < tx + width && checkY >= ty && checkY < ty + height;
-    });
-    const isTrapAhead = checkTiles.some(t => (t.type === 'lava' || t.type === 'water' || t.type === 'spike-pit') && !t.isNeutralized);
-    
-    // Only jump if we are NOT already on a trap (to allow walking with boots)
-    const currentTiles = tiles.filter(t => {
-      if ((t.z || 0) !== currentZ) return false;
-      const { x: tx, y: ty, width, height } = getTileBounds(t);
-      return playerPos.x >= tx && playerPos.x < tx + width && playerPos.y >= ty && playerPos.y < ty + height;
-    });
-    const isCurrentlyOnTrap = currentTiles.some(t => (t.type === 'lava' || t.type === 'water' || t.type === 'spike-pit') && !t.isNeutralized);
-
-    let effectiveAction = actionType;
-    if (actionType === 'jump' && isTrapAhead && !isCurrentlyOnTrap) {
-      step = 3;
-    }
 
     let finalX = playerPos.x;
     let finalY = playerPos.y;
@@ -130,17 +135,12 @@ export const usePlayerMovement = ({
       const nextY = finalY + dy;
       const isIntermediate = step > 1 && i < step - 1;
 
-      // Boundary check
-      if (nextX < 0 || nextX >= canvasWidth / gridSize || nextY < 0 || nextY >= canvasHeight / gridSize) break;
-
       const nextTiles = tiles.filter(t => {
         const tz = t.z || 0;
         const isStair = t.type === 'stairs-up' || t.type === 'stairs-down' || t.type === 'hole';
         
-        // Normal tiles must be on current Z
         if (!isStair && tz !== finalZ) return false;
         
-        // Stairs/Holes are relevant if they are on current Z or connect to it
         if (t.type === 'stairs-up' && tz !== finalZ && tz !== finalZ - 1) return false;
         if (t.type === 'stairs-down' && tz !== finalZ && tz !== finalZ + 1) return false;
         if (t.type === 'hole' && tz !== finalZ && tz !== finalZ + 1) return false;
@@ -149,76 +149,114 @@ export const usePlayerMovement = ({
         return nextX >= tx && nextX < tx + width && nextY >= ty && nextY < ty + height;
       });
 
-      // Monster collision check (Cannot jump over Orcs or Spiders, but CAN jump over Teeth)
       const monsterAtNext = monsters.find(m => m.x === nextX && m.y === nextY && (m.z || 0) === finalZ);
-      if (monsterAtNext) {
-        const isTeeth = monsterAtNext.type === 'teeth';
-        const canJumpOver = isTeeth && effectiveAction === 'jump';
+      if (monsterAtNext && !isGameOver && !isJumping) {
         const isShielded = hasShield || (selectedArtefact === 'artefact-shield' && isArtefactActive);
 
-        if (canJumpOver) {
-          // Immobilize Teeth for 4 seconds after jumping over them
-          setMonsters(prev => prev.map(m => m.id === monsterAtNext.id ? { ...m, immobilizedUntil: playTime + 4 } : m));
-        }
-
-        if (!canJumpOver && !isShielded) {
+        if (!isShielded && spawnProtectionTime <= 0) {
           setIsDying(true);
-          setIsFlashing(true);
           setDeathCount(prev => prev + 1);
           setHealth(0);
           finalX = nextX;
           finalY = nextY;
-          setTimeout(() => {
-            setIsDying(false);
-            setIsFlashing(false);
-            setHealth(100);
-            const entrance = tiles.find(t => t.type === 'entrance');
-            if (entrance) {
-              setPlayerPos({ x: entrance.x, y: entrance.y, z: entrance.z || 0 });
-            }
-            setMonsters([]);
-          }, 1000);
           break;
         }
       }
 
-      // Wall check (current)
+      // Wall & Obstacle check
+      let blockedVal = false;
+      
       const currentPosTiles = tiles.filter(t => {
         if ((t.z || 0) !== finalZ) return false;
         const { x: tx, y: ty, width, height } = getTileBounds(t);
         return finalX >= tx && finalX < tx + width && finalY >= ty && finalY < ty + height;
       });
-      if (currentPosTiles.some(t => isWallBlocked(t, direction, finalX, finalY, false))) break;
 
-      // Wall check (next)
-      if (nextTiles.some(t => isWallBlocked(t, oppositeDir, nextX, nextY, true))) break;
+      if (currentPosTiles.some(t => isWallBlocked(t, direction, finalX, finalY, false))) blockedVal = true;
 
-      // Obstacle check (unless jumping)
-      if (effectiveAction !== 'jump') {
-        const isBlocked = nextTiles.some(t => {
-          if (t.isNeutralized) return false;
-          return t.type === 'obstacle-half-h' || t.type === 'obstacle-above' || t.type === 'column';
-        });
-        if (isBlocked) break;
+      if (!blockedVal) {
+        if (nextTiles.some(t => isWallBlocked(t, oppositeDir, nextX, nextY, true))) blockedVal = true;
       }
 
-      // Stair logic
-      const stairUp = nextTiles.find(t => t.type === 'stairs-up' && (t.z || 0) === finalZ);
-      const stairDown = nextTiles.find(t => t.type === 'stairs-down' && (t.z || 0) === finalZ);
-      const hole = nextTiles.find(t => t.type === 'hole' && (t.z || 0) === finalZ);
+      // Solid objects ALWAYS block (trees, columns)
+      const solidObstacle = nextTiles.find(t => !t.isNeutralized && (t.type === 'column' || t.type === 'tree'));
+      if (solidObstacle) blockedVal = true;
 
-      if (stairUp) {
-        finalZ += 1;
-      } else if (stairDown || hole) {
-        finalZ -= 1;
+      if (blockedVal) break;
+
+      // Other obstacles & Hazards
+      const isBlockedByOther = nextTiles.some(t => {
+        if (t.isNeutralized) return false;
+        const isSliding = effectiveAction === 'slide';
+
+        if (t.type === 'obstacle-half-h') return true;
+        if (t.type === 'obstacle-above' && !isSliding) return true;
+        
+        // Swerve check
+        if (t.type === 'obstacle-half-w') {
+          const blocked = isSwerveBlocked(t, direction, false, activeKeys);
+          setBumpEffect({ x: nextX, y: nextY, tick });
+          return blocked;
+        }
+
+        // Hazards
+        const isHazard = t.type === 'void' || t.type === 'lava' || t.type === 'water' || t.type === 'spike-pit';
+        if (isHazard && !isJumping) {
+          if (spawnProtectionTime > 0) return false; // Protection 
+          
+          setHealth(0);
+          setDeathCount(prev => prev + 1);
+          if (t.type === 'void') setIsFalling(true);
+          else setIsDying(true);
+          
+          finalX = nextX; finalY = nextY;
+          return true;
+        }
+        return false;
+      });
+      if (isBlockedByOther) break;
+
+      // Interaction check DURING movement to prevent skipping clues/messages
+      const infoTile = nextTiles.find(t => t.type === 'message' || t.type === 'clue');
+      if (infoTile && infoTile.message) {
+        setTextEditModal((prev: any) => {
+          if (!prev.isOpen || prev.tileId !== infoTile.id) {
+            return {
+              isOpen: true,
+              tileId: infoTile.id,
+              text: infoTile.message,
+              type: infoTile.type as 'message' | 'clue',
+              mode: 'view',
+              autoCloseAt: Date.now() + 6000
+            };
+          }
+          return prev;
+        });
+      }
+      // Stair/Hole logic
+      if (!isIntermediate) {
+        const stairUp = nextTiles.find(t => t.type === 'stairs-up' && (t.z || 0) === finalZ);
+        const stairDown = nextTiles.find(t => t.type === 'stairs-down' && (t.z || 0) === finalZ);
+        const hole = nextTiles.find(t => t.type === 'hole' && (t.z || 0) === finalZ);
+
+        if (stairUp) {
+          finalZ += 1;
+        } else if (stairDown || hole) {
+          finalZ -= 1;
+        }
       }
 
       finalX = nextX;
       finalY = nextY;
     }
 
-    setPlayerPos({ x: finalX, y: finalY, z: finalZ });
-  }, [mode, isGameOver, isWin, isDying, isInitialArtefactSelection, isPaused, playerPos, tiles, monsters, gridSize, canvasWidth, canvasHeight, jumpBoostTime, hasJumper, selectedArtefact, isArtefactActive, speedBoostTime, hasRunner, webSlowTime, playTime, hasShield, setIsDying, setIsFlashing, setDeathCount, setHealth, setLastDirection, isWallBlocked, setMonsters, setPlayerPos]);
+    setPlayerAction(actionType);
+    setPlayerPos({ x: Math.round(finalX), y: Math.round(finalY), z: finalZ });
+
+    if (actionType !== 'normal') {
+      setTimeout(() => setPlayerAction('normal'), actionType === 'jump' ? 400 : 300);
+    }
+  }, [mode, isGameOver, isWin, isDying, isFalling, isInitialArtefactSelection, isPaused, playerPos, tiles, monsters, playTime, hasShield, selectedArtefact, isArtefactActive, speedBoostTime, hasRunner, hasJumper, jumpBoostTime, webSlowTime, setIsDying, setDeathCount, setHealth, setLastDirection, setPlayerAction, setMonsters, setTextEditModal, setBumpEffect, tick, setIsFalling, spawnProtectionTime, isWallBlocked, setPlayerPos]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -235,31 +273,69 @@ export const usePlayerMovement = ({
 
       let dx = 0;
       let dy = 0;
-      let action: 'normal' | 'jump' | 'slide' = 'normal';
+      let key: string | null = null;
+      let action: 'normal' | 'slide' = 'normal';
 
-      if (e.key === 'ArrowUp' || e.key === 'w') dy = -1;
-      else if (e.key === 'ArrowDown' || e.key === 's') dy = 1;
-      else if (e.key === 'ArrowLeft' || e.key === 'a') dx = -1;
-      else if (e.key === 'ArrowRight' || e.key === 'd') dx = 1;
-      else if (e.key === ' ' || e.key === 'j') {
-        action = 'jump';
-        dx = lastDirection.dx;
-        dy = lastDirection.dy;
-      } else if (e.key === 'k') {
+      if (e.key === 'ArrowUp' || e.key === 'w') { dy = -1; key = 'w'; }
+      else if (e.key === 'ArrowDown' || e.key === 's') { dy = 1; key = 's'; }
+      else if (e.key === 'ArrowLeft' || e.key === 'a') { dx = -1; key = 'a'; }
+      else if (e.key === 'ArrowRight' || e.key === 'd') { dx = 1; key = 'd'; }
+      else if (e.key === ' ' && playerAction === 'normal') {
+        e.preventDefault();
+        movePlayer(lastDirection.dx, lastDirection.dy, 'jump');
+        return;
+      }
+      else if (e.key === 'k') {
         action = 'slide';
         dx = lastDirection.dx;
         dy = lastDirection.dy;
+        key = 'k';
       }
 
-      if (dx !== 0 || dy !== 0) {
-        setPlayerAction(action);
-        movePlayer(dx, dy, action);
+      if (key) {
+        const nextKeys = new Set(pressedKeys);
+        nextKeys.add(key);
+        setPressedKeys(nextKeys);
+        
+        let finalAction = action;
+        if (nextKeys.has('lmb') || nextKeys.has('k')) finalAction = 'slide';
+
+        if (dx !== 0 || dy !== 0) {
+          setPlayerAction(finalAction);
+          movePlayer(dx, dy, finalAction, nextKeys);
+        }
+      } else {
+        if (dx !== 0 || dy !== 0) {
+          let finalAction = action;
+          if (pressedKeys.has('lmb') || pressedKeys.has('k')) finalAction = 'slide';
+          setPlayerAction(finalAction);
+          movePlayer(dx, dy, finalAction, pressedKeys);
+        }
       }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key === ' ' || e.key === 'j' || e.key === 'k') {
-        setPlayerAction('normal');
+      let key = '';
+      if (e.key === 'ArrowUp' || e.key === 'w') key = 'w';
+      else if (e.key === 'ArrowDown' || e.key === 's') key = 's';
+      else if (e.key === 'ArrowLeft' || e.key === 'a') key = 'a';
+      else if (e.key === 'ArrowRight' || e.key === 'd') key = 'd';
+      else if (e.key === 'k') key = 'k';
+
+      if (key) {
+        setPressedKeys(prev => {
+          const next = new Set(prev);
+          next.delete(key);
+          return next;
+        });
+      }
+      
+      if (e.key === 'k') {
+        if (!pressedKeys.has('lmb') && !pressedKeys.has('k')) {
+          setPlayerAction('normal');
+        } else {
+          setPlayerAction('slide');
+        }
       }
     };
 

@@ -1,5 +1,5 @@
-import React, { useRef, useEffect } from 'react';
-import { Stage, Layer, Rect, Line, Group, Text } from 'react-konva';
+import React, { useRef, useEffect, useMemo } from 'react';
+import { Stage, Layer, Rect, Line, Group, Text, Circle } from 'react-konva';
 import { motion, AnimatePresence } from 'motion/react';
 import { Skull, Trophy, Plus, Zap, Settings, RotateCw } from 'lucide-react';
 import Konva from 'konva';
@@ -43,7 +43,6 @@ interface GameViewProps {
   powerUpDuration: number;
   thirdEyeTimeLeft: number;
   speedBoostTime: number;
-  jumpBoostTime: number;
   lightTime: number;
   slowMonstersTime: number;
   trappedTime: number;
@@ -51,6 +50,8 @@ interface GameViewProps {
   isGameOver: boolean;
   isDying: boolean;
   isPaused: boolean;
+  isFalling: boolean;
+  fallingProgress: number;
   hiddenTileIds: Set<string>;
   currentZ: number;
   tick: number;
@@ -78,6 +79,13 @@ interface GameViewProps {
   buildTool: string;
   selectedTileType: TileType;
   movingTileId: string | null;
+  cameraMode: 'follow' | 'screen';
+  isDarknessOn: boolean;
+  darknessRadius: number;
+  bumpEffect: { x: number; y: number; tick: number } | null;
+  spawnProtectionTime: number;
+  playerAction: 'normal' | 'jump' | 'slide';
+  viewportInsets: { top: number; right: number; bottom: number; left: number };
 }
 
 export const GameView = ({
@@ -106,13 +114,14 @@ export const GameView = ({
   powerUpDuration,
   thirdEyeTimeLeft,
   speedBoostTime,
-  jumpBoostTime,
   lightTime,
   slowMonstersTime,
   trappedTime,
   isWin,
   isGameOver,
   isDying,
+  isFalling,
+  fallingProgress,
   isPaused,
   hiddenTileIds,
   currentZ,
@@ -140,8 +149,70 @@ export const GameView = ({
   setShowDebug,
   buildTool,
   selectedTileType,
-  movingTileId
+  movingTileId,
+  cameraMode,
+  isDarknessOn,
+  darknessRadius,
+  bumpEffect,
+  spawnProtectionTime,
+  playerAction,
+  viewportInsets
 }: GameViewProps) => {
+  // --- Viewport Calculation ---
+  // Calculate viewport bounds in world coordinates
+  const viewportX = -stagePos.x / stageScale;
+  const viewportY = -stagePos.y / stageScale;
+  // Define a massive static world size to avoid recalculations during movement
+  // Ensure HALF_WORLD is a multiple of gridSize (64) for perfect alignment
+  const WORLD_SIZE = 40000;
+  const HALF_WORLD = Math.floor(WORLD_SIZE / 2 / 64) * 64; 
+
+  // --- Grid Pattern Optimization ---
+  const gridPatternImage = useMemo(() => {
+    if (typeof window === 'undefined') return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = gridSize;
+    canvas.height = gridSize;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(gridSize, 0);
+      ctx.moveTo(0, 0);
+      ctx.lineTo(0, gridSize);
+      ctx.stroke();
+    }
+    return canvas;
+  }, [gridSize]);
+
+  const showGrid = gridSize * stageScale > 8;
+
+  const screenGuides = useMemo(() => {
+    if (cameraMode !== 'screen' || mode !== 'build') return null;
+    const lines = [];
+    
+    // Effective playfield size in pixels (Zelda-style)
+    const effectiveW = containerSize.width - viewportInsets.left - viewportInsets.right;
+    const effectiveH = containerSize.height - viewportInsets.top - viewportInsets.bottom;
+
+    // Room size in world coordinates
+    const roomW = effectiveW / stageScale;
+    const roomH = effectiveH / stageScale;
+    
+    // We start from 0 and go outwards to ensure start (0,0) is origin of rooms
+    for (let y = 0; y < HALF_WORLD; y += roomH) {
+      lines.push(<Line key={`sh-${y}`} points={[-HALF_WORLD, y, HALF_WORLD, y]} stroke="#fbbf24" strokeWidth={1 / stageScale} dash={[10 / stageScale, 10 / stageScale]} opacity={0.3} listening={false} />);
+      if (y > 0) lines.push(<Line key={`sh--${y}`} points={[-HALF_WORLD, -y, HALF_WORLD, -y]} stroke="#fbbf24" strokeWidth={1 / stageScale} dash={[10 / stageScale, 10 / stageScale]} opacity={0.3} listening={false} />);
+    }
+    for (let x = 0; x < HALF_WORLD; x += roomW) {
+      lines.push(<Line key={`sv-${x}`} points={[x, -HALF_WORLD, x, HALF_WORLD]} stroke="#fbbf24" strokeWidth={1 / stageScale} dash={[10 / stageScale, 10 / stageScale]} opacity={0.3} listening={false} />);
+      if (x > 0) lines.push(<Line key={`sv--${x}`} points={[-x, -HALF_WORLD, -x, HALF_WORLD]} stroke="#fbbf24" strokeWidth={1 / stageScale} dash={[10 / stageScale, 10 / stageScale]} opacity={0.3} listening={false} />);
+    }
+    return lines;
+  }, [cameraMode, mode, containerSize, stageScale, viewportInsets]);
+
   return (
     <div 
       ref={containerRef}
@@ -216,34 +287,49 @@ export const GameView = ({
         style={{ backgroundColor: 'transparent' }} 
       >
         <Layer>
-          {/* Dungeon Floor Background */}
+          {/* Massive Static Floor Background */}
           <Rect
-            x={-10000}
-            y={-10000}
-            width={20000 + canvasWidth}
-            height={20000 + canvasHeight}
+            x={-HALF_WORLD}
+            y={-HALF_WORLD}
+            width={WORLD_SIZE}
+            height={WORLD_SIZE}
             fill="#09090b"
+            listening={false}
           />
 
-          {/* Grid Lines */}
-          {[...Array(Math.ceil((canvasWidth + 20000) / gridSize) + 1)].map((_, i) => (
-            <Line
-              key={`v-${i}`}
-              points={[(i * gridSize) - 10000, -10000, (i * gridSize) - 10000, canvasHeight + 10000]}
-              stroke="#ffffff"
-              strokeWidth={0.5}
-              opacity={0.05}
-            />
-          ))}
-          {[...Array(Math.ceil((canvasHeight + 20000) / gridSize) + 1)].map((_, i) => (
-            <Line
-              key={`h-${i}`}
-              points={[-10000, (i * gridSize) - 10000, canvasWidth + 10000, (i * gridSize) - 10000]}
-              stroke="#ffffff"
-              strokeWidth={0.5}
-              opacity={0.05}
-            />
-          ))}
+          {/* Massive Static Grid Pattern */}
+          <Rect
+            x={-HALF_WORLD}
+            y={-HALF_WORLD}
+            width={WORLD_SIZE}
+            height={WORLD_SIZE}
+            fillPatternImage={gridPatternImage as any}
+            fillPatternRepeat="repeat"
+            opacity={showGrid ? 1 : 0}
+            listening={false}
+          />
+
+          {screenGuides}
+
+          {/* World Origin Marker (Subtle guide instead of hard boundary) */}
+          <Circle
+            x={0}
+            y={0}
+            radius={2}
+            fill="#4f46e5"
+            opacity={0.5}
+          />
+          <Rect
+            x={0}
+            y={0}
+            width={canvasWidth}
+            height={canvasHeight}
+            stroke="#4f46e5"
+            strokeWidth={1}
+            dash={[10, 10]}
+            opacity={0.1}
+            listening={false}
+          />
 
           {/* Tiles */}
           {mode === 'build' && tiles
@@ -307,11 +393,24 @@ export const GameView = ({
               return mode === 'build' || !hiddenTileIds.has(t.id);
             })
             .sort((a, b) => {
-              const catA = TILE_LIBRARY.find(t => t.type === a.type)?.category;
-              const catB = TILE_LIBRARY.find(t => t.type === b.type)?.category;
-              if (catA === 'monster' && catB !== 'monster') return 1;
-              if (catA !== 'monster' && catB === 'monster') return -1;
-              return 0;
+              const defA = TILE_LIBRARY.find(t => t.type === a.type);
+              const defB = TILE_LIBRARY.find(t => t.type === b.type);
+              
+              const getPriority = (def: any) => {
+                if (!def) return 0;
+                if (def.category === 'monster') return 100;
+                if (def.category === 'items' || def.category === 'power-up' || def.category === 'artefact') return 50;
+                if (def.category === 'quad' || def.category === 'room' || def.category === 'corridor') return 10;
+                return 0;
+              };
+
+              const pA = getPriority(defA);
+              const pB = getPriority(defB);
+              
+              if (pA !== pB) return pA - pB;
+              
+              // Secondarily sort by ID to maintain stable order if same priority
+              return a.id.localeCompare(b.id);
             })
             .map((tile) => (
               <TileRenderer 
@@ -333,25 +432,32 @@ export const GameView = ({
           {/* Player */}
           {mode === 'play' && (
             <Group 
-              x={playerPos.x * gridSize} 
-              y={playerPos.y * gridSize}
+              x={playerPos.x * gridSize + gridSize / 2} 
+              y={playerPos.y * gridSize + gridSize / 2}
+              scaleX={fallingProgress * (playerAction === 'slide' ? 1.4 : playerAction === 'jump' ? 1.2 : 1)}
+              scaleY={fallingProgress * (playerAction === 'slide' ? 0.6 : playerAction === 'jump' ? 1.2 : 1)}
+              offsetY={playerAction === 'jump' ? 20 : 0}
             >
-              <Rect 
-                width={gridSize} 
-                height={gridSize} 
+              {lightTime > 0 && (
+                <Circle 
+                  radius={gridSize * 1.5}
+                  fillRadialGradientStartPoint={{ x: 0, y: 0 }}
+                  fillRadialGradientStartRadius={0}
+                  fillRadialGradientEndPoint={{ x: 0, y: 0 }}
+                  fillRadialGradientEndRadius={gridSize * 1.5}
+                  fillRadialGradientColorStops={[0, 'rgba(254, 240, 138, 0.4)', 1, 'rgba(254, 240, 138, 0)']}
+                />
+              )}
+              <Circle 
+                radius={gridSize * 0.35}
                 fill="#f472b6" 
-                cornerRadius={4}
-                shadowBlur={10}
-                shadowColor="#f472b6"
-                opacity={isDying ? 0.5 : 1}
+                shadowBlur={spawnProtectionTime > 0 ? 25 : 15}
+                shadowColor={spawnProtectionTime > 0 ? "#67e8f9" : "#f472b6"}
+                opacity={isDying ? 0.5 : (spawnProtectionTime > 0 && Math.floor(spawnProtectionTime * 10) % 2 === 0 ? 0.3 : 1)}
               />
-              <Rect 
-                width={gridSize - 8} 
-                height={gridSize - 8} 
-                x={4}
-                y={4}
-                fill="#fbcfe8" 
-                cornerRadius={2}
+              <Circle 
+                radius={gridSize * 0.2}
+                fill={spawnProtectionTime > 0 ? "#cffafe" : "#fbcfe8"} 
               />
             </Group>
           )}
@@ -392,16 +498,14 @@ export const GameView = ({
                 {isPowerUpActive && <Rect x={5} width={30} height={12} fill="#ec4899" cornerRadius={2} />}
                 {isThirdEyeActive && <Rect x={40} width={30} height={12} fill="#a855f7" cornerRadius={2} />}
                 {speedBoostTime > 0 && <Rect x={75} width={30} height={12} fill="#6366f1" cornerRadius={2} />}
-                {jumpBoostTime > 0 && <Rect x={110} width={30} height={12} fill="#f97316" cornerRadius={2} />}
-                {lightTime > 0 && <Rect x={145} width={30} height={12} fill="#fef08a" cornerRadius={2} />}
-                {slowMonstersTime > 0 && <Rect x={180} width={30} height={12} fill="#94a3b8" cornerRadius={2} />}
+                {lightTime > 0 && <Rect x={110} width={30} height={12} fill="#fef08a" cornerRadius={2} />}
+                {slowMonstersTime > 0 && <Rect x={145} width={30} height={12} fill="#94a3b8" cornerRadius={2} />}
                 
                 <Text text="RUNES" fontSize={6} fill="white" x={8} y={3} fontStyle="bold" opacity={isPowerUpActive ? 1 : 0.2} />
                 <Text text="EYE" fontSize={6} fill="white" x={48} y={3} fontStyle="bold" opacity={isThirdEyeActive ? 1 : 0.2} />
                 <Text text="SPEED" fontSize={6} fill="white" x={78} y={3} fontStyle="bold" opacity={speedBoostTime > 0 ? 1 : 0.2} />
-                <Text text="JUMP" fontSize={6} fill="white" x={114} y={3} fontStyle="bold" opacity={jumpBoostTime > 0 ? 1 : 0.2} />
-                <Text text="LIGHT" fontSize={6} fill="white" x={149} y={3} fontStyle="bold" opacity={lightTime > 0 ? 1 : 0.2} />
-                <Text text="SLOW" fontSize={6} fill="white" x={185} y={3} fontStyle="bold" opacity={slowMonstersTime > 0 ? 1 : 0.2} />
+                <Text text="LIGHT" fontSize={6} fill="white" x={114} y={3} fontStyle="bold" opacity={lightTime > 0 ? 1 : 0.2} />
+                <Text text="SLOW" fontSize={6} fill="white" x={150} y={3} fontStyle="bold" opacity={slowMonstersTime > 0 ? 1 : 0.2} />
               </Group>
               
               {trappedTime > 0 && (
@@ -418,6 +522,79 @@ export const GameView = ({
                   />
                 </Group>
               )}
+            </Group>
+          )}
+        </Layer>
+
+        {/* Darkness Layer */}
+        {mode === 'play' && isDarknessOn && (
+          <Layer listening={false}>
+            <Rect
+              x={viewportX - containerSize.width / stageScale}
+              y={viewportY - containerSize.height / stageScale}
+              width={containerSize.width * 3 / stageScale}
+              height={containerSize.height * 3 / stageScale}
+              fill="black"
+            />
+            <Circle
+              x={playerPos.x * gridSize + gridSize / 2}
+              y={playerPos.y * gridSize + gridSize / 2}
+              radius={Math.max(1, (isArtefactActive && selectedArtefact === 'artefact-rod' ? 12 : (lightTime > 0 ? darknessRadius * 2.5 : darknessRadius)) * gridSize)}
+              fill="white"
+              globalCompositeOperation="destination-out"
+            />
+          </Layer>
+        )}
+
+        {/* Feedback Layer (On top of all layers inside the stage) */}
+        <Layer listening={false}>
+          {bumpEffect && (
+            <Group 
+              x={playerPos.x * gridSize + gridSize / 2} 
+              y={playerPos.y * gridSize + gridSize / 2}
+            >
+              {/* Stars */}
+              {[...Array(3)].map((_, i) => (
+                <Text
+                  key={`star-${i}`}
+                  text="⭐"
+                  fontSize={24}
+                  x={Math.cos((tick * 0.5) + (i * Math.PI * 2 / 3)) * 40 - 12}
+                  y={Math.sin((tick * 0.5) + (i * Math.PI * 2 / 3)) * 40 - 12}
+                  opacity={0.8}
+                />
+              ))}
+              
+              {/* Speech Bubble (3x Scale) */}
+              <Group y={-140} x={-90}>
+                <Rect
+                  width={180}
+                  height={108}
+                  fill="white"
+                  cornerRadius={12}
+                  stroke="#fbbf24"
+                  strokeWidth={4}
+                  shadowBlur={10}
+                  shadowColor="rgba(0,0,0,0.3)"
+                />
+                {/* Pointer */}
+                <Line
+                  points={[90, 108, 65, 135, 115, 108]}
+                  fill="white"
+                  closed
+                  stroke="#fbbf24"
+                  strokeWidth={2}
+                />
+                <Text
+                  text="ow!"
+                  fontSize={54}
+                  fontStyle="bold"
+                  fill="#92400e"
+                  width={180}
+                  align="center"
+                  y={24}
+                />
+              </Group>
             </Group>
           )}
         </Layer>
@@ -571,7 +748,7 @@ export const GameView = ({
             Press Tab to Focus
           </div>
           <div className="bg-zinc-900/40 backdrop-blur-sm px-3 py-1.5 rounded border border-white/5 text-[9px] font-mono text-zinc-500 uppercase tracking-widest">
-            WASD: MOVE | SPACE: JUMP | SHIFT: SLIDE
+            WASD: MOVE | SHIFT: SLIDE
           </div>
         </div>
       )}

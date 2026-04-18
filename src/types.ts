@@ -30,8 +30,8 @@ export type TileType =
   | 'artefact-rod'
   | 'artefact-cloak'
   | 'artefact-boots'
-  | 'artefact-jumper'
   | 'artefact-runner'
+  | 'artefact-jumper'
   | 'exit'
   | 'portal'
   | 'mushroom'
@@ -42,7 +42,6 @@ export type TileType =
   | 'health-potion'
   | 'firefly'
   | 'magic-tile'
-  | 'trampoline'
   | 'lever'
   | 'third-eye'
   | 'stairs-up'
@@ -53,6 +52,7 @@ export type TileType =
   | 'speed'
   | 'key'
   | 'message'
+  | 'void'
   | 'open-floor-x5';
 
 export interface TriggerData {

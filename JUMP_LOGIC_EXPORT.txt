@@ -1,0 +1,116 @@
+/**
+ * JUMP SYSTEM EXPORT
+ * This file contains the primary functions responsible for the Jumping mechanic.
+ * It is intended for manual review or inspection by other AI models.
+ */
+
+// --- Types for context ---
+type PlayerAction = 'normal' | 'jump' | 'slide';
+
+/**
+ * 1. MOVEMENT CONTROLLER
+ * This logic resides inside 'usePlayerMovement.ts'.
+ * It handles the physics, distance, and collision immunity of the jump.
+ */
+function movePlayerLogic(dx, dy, actionType) {
+    // A jump is identified by the 'actionType' parameter
+    const isJumping = actionType === 'jump';
+
+    // STEP 1: Determine distance
+    // Base distance is 3 tiles.
+    // Boosted distance is 5 tiles (if Jumper artefact is held/active or boost is on).
+    let step = 1; // Default
+    if (isJumping) {
+        step = (hasJumper || isArtefactActive || jumpBoostTime > 0) ? 5 : 3;
+    }
+
+    // STEP 2: Collision Loop
+    // We step tile-by-tile to detect walls but bypass hazards.
+    let finalX = playerPos.x;
+    let finalY = playerPos.y;
+
+    for (let i = 0; i < step; i++) {
+        const nextX = finalX + dx;
+        const nextY = finalY + dy;
+
+        // A. Monster Immunity
+        // Monsters are only checked if NOT jumping.
+        if (monsterAt(nextX, nextY) && !isJumping) {
+            handleDeath();
+            break;
+        }
+
+        // B. Wall Check (MANDATORY)
+        // Walls always block jumps.
+        if (isBlockedByWall(nextX, nextY)) {
+            break; // Stop jumping forward
+        }
+
+        // C. Hazard Immunity
+        // Spikes, Lava, Water, and Voids are ignored if isJumping is true.
+        if (isHazard(nextX, nextY) && !isJumping) {
+            handleDeath();
+            break;
+        }
+
+        // D. Stair/Floor Logic
+        // Calculate floor changes (Z-axis). This happens at the end of a step.
+        updateZAxis(nextX, nextY);
+
+        finalX = nextX;
+        finalY = nextY;
+    }
+
+    // STEP 3: State Update
+    // Apply the final coordinate and set the character state to 'jump'.
+    updatePlayerPosition(finalX, finalY);
+    setPlayerAction('jump');
+
+    // STEP 4: Recovery
+    // After 400ms, clear the jump action to restore normal physics/collisions.
+    setTimeout(() => {
+        setPlayerAction('normal');
+    }, 400); 
+}
+
+/**
+ * 2. TRIGGER CONTROLLER
+ * Initiates the jump from the keyboard.
+ */
+function handleJumpInput(event) {
+    if (event.key === ' ' && currentPlayerState === 'normal') {
+        // Jump in the direction the player was last moving.
+        movePlayerLogic(lastDirection.dx, lastDirection.dy, 'jump');
+    }
+}
+
+/**
+ * 3. RENDERER TRANSFORM
+ * Visual lift effect during the jump.
+ */
+function renderPlayer(playerAction) {
+    const isJumping = playerAction === 'jump';
+    
+    return {
+        // Visual lift: move the sprite up by 20 pixels relative to its tile.
+        offsetY: isJumping ? 20 : 0,
+        // Visual scale: puff the character up slightly to simulate depth/height.
+        scale: isJumping ? 1.2 : 1.0,
+        // Smooth transition is handled by Konva's drawing loop.
+    };
+}
+
+/**
+ * 4. SYSTEM FLOW ANALYSIS (Internal Notes)
+ * - COORDINATE SYSTEM: Uses a discrete integer grid (x, y). Jumps move the player across N grid cells.
+ * - COLLISION GAP: Because the collision check is 'discrete' (per tile), there is no frame-by-frame 
+ *   collision in mid-air. The code simply checks the 'next' tile in the 3-step sequence.
+ * - CAMERA GLITCH: If the camera is locked to the player (cameraMode: 'follow'), the stage position 
+ *   is calculated as StagePos = -(PlayerPos * GridSize). During a jump, PlayerPos changes instantly 
+ *   by 3 to 5 units. This causes the Stage (the entire dungeon) to abruptly "snap" or "tween" to 
+ *   center on the new location. This is often perceived as a "glitch" where the environment 
+ *   flickers or shifts violently.
+ * - RENDERING LAG: Because movement happens in a 'setTimeout/useCallback' loop but rendering 
+ *   happens in a 'requestAnimationFrame' loop (via Konva), there can be a 1-frame mismatch 
+ *   where the world has moved but the player's 'jump' transform hasn't been applied yet.
+ */

@@ -89,6 +89,11 @@ service cloud.firestore {
     // Rules
     // ===============================================================
 
+    // Rules for connection testing
+    match /_connection_test_/{docId} {
+      allow read: if true;
+    }
+
     match /users/{userId} {
       allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
       allow create: if isAuthenticated() && isValidUser(request.resource.data) && isOwner(userId);
